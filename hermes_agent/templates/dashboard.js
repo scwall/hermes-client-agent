@@ -14,11 +14,12 @@ const Dashboard = (function() {
   };
 
   function init() {
-    const params = new URLSearchParams(window.location.search);
+    var params = new URLSearchParams(window.location.search);
+    var defaults = window._hermesDefaults || {};
     state.offset = parseInt(params.get('offset')) || 0;
     state.limit = parseInt(params.get('count')) || 50;
-    state.endpointFilter = params.get('endpoint') || '';
-    state.statusFilter = params.get('status') || '';
+    state.endpointFilter = params.get('endpoint') || defaults.endpoint || '';
+    state.statusFilter = params.get('status') || defaults.status || '';
     state.searchQuery = params.get('search') || '';
 
     if (state.endpointFilter) document.getElementById('filter-endpoint').value = state.endpointFilter;

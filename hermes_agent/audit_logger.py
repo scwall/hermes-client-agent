@@ -212,7 +212,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
     Placed after the rate-limiter and auth middleware so that even 401/403
     responses are captured.
+    Dashboard internal polling endpoints (/api/stats, /api/logs) are skipped
+    to avoid inflating the statistics.
     """
+
+    _SKIP_ENDPOINTS = {"/api/stats", "/api/logs", "/api/logs/export", "/api/clear-logs"}
 
     async def dispatch(self, request: Request, call_next):
         start = time.perf_counter()
@@ -223,6 +227,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
         endpoint = request.url.path
         method = request.method
         status = response.status_code
+
+        if endpoint in self._SKIP_ENDPOINTS:
+            return response
 
         request_body: Optional[dict[str, Any]] = None
         if method in ("POST", "PUT") and request.url.path.startswith("/exec"):

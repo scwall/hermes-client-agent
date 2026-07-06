@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Hermes Agent &mdash; Errors{% endblock %}
+{% block extra_head %}
+<script>window._hermesDefaults = {status: 'error'};</script>
+{% endblock %}
 {% block content %}
 <h1>Errors <span class="badge err">{{ total }}</span></h1>
 {% include "partials/stats_bar.html" %}
