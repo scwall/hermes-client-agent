@@ -1,0 +1,19 @@
+<div id="filters">
+  <select id="filter-endpoint" onchange="Dashboard.applyFilters()">
+    <option value="">All endpoints</option>
+    {% for ep in endpoints %}
+    <option value="{{ ep }}"{% if ep == endpoint_filter %} selected{% endif %}>{{ ep }}</option>
+    {% endfor %}
+  </select>
+  <select id="filter-status" onchange="Dashboard.applyFilters()">
+    <option value="">All statuses</option>
+    <option value="success"{% if 'success' == status_filter %} selected{% endif %}>Success</option>
+    <option value="error"{% if 'error' == status_filter %} selected{% endif %}>Errors</option>
+  </select>
+  <input type="text" id="filter-search" placeholder="Search..." value="{{ search_query }}" oninput="Dashboard.applyFilters()">
+  <button onclick="Dashboard.exportLogs('csv')" class="primary" title="Download CSV">Export CSV</button>
+  <button onclick="Dashboard.exportLogs('json')" class="primary" title="Download JSON">Export JSON</button>
+  <button onclick="Dashboard.clearOldLogs()" class="danger">Clear old logs</button>
+  <label><input type="checkbox" id="cb-autorefresh" checked onchange="Dashboard.toggleAutoRefresh()"> Auto-refresh</label>
+  <span id="auto-refresh-status"></span>
+</div>

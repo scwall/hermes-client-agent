@@ -1,0 +1,29 @@
+# Environment
+.env
+.venv/
+/venv/
+
+# Build artifacts
+build/
+dist/
+*.spec
+*.spec.bak
+
+# Logs
+logs/
+/logs/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Binaries
+*.exe

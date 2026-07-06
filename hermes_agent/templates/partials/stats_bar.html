@@ -1,0 +1,18 @@
+<div id="stats-bar">
+  <div class="stat-card">
+    <div class="value" id="stat-total">{{ stats.get('total', 0) }}</div>
+    <div class="label">Total Requests</div>
+  </div>
+  <div class="stat-card">
+    <div class="value" id="stat-success">{{ stats.get('success', 0) }}</div>
+    <div class="label">Success</div>
+  </div>
+  <div class="stat-card">
+    <div class="value" id="stat-errors" style="color:{% if stats.get('errors', 0) > 0 %}#f85149{% endif %}">{{ stats.get('errors', 0) }}</div>
+    <div class="label">Errors</div>
+  </div>
+  <div class="stat-card">
+    <div class="value" id="stat-avg">{{ stats.get('avg_duration_ms', 0) }} ms</div>
+    <div class="label">Avg Duration</div>
+  </div>
+</div>

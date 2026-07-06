@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Hermes Agent{% endblock %}</title>
+  <style>{% include "base.css" %}</style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  {% include "partials/nav.html" %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    Hermes Windows Agent v1.0 &mdash; <a href="/docs">API Docs</a> &bull; <a href="/redoc">ReDoc</a>
+  </footer>
+  <script>{% include "dashboard.js" %}</script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

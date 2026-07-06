@@ -1,0 +1,11 @@
+{
+  "agents": {
+    "default": "laptop",
+    "laptop": {
+      "url": "http://192.168.1.4:8765",
+      "token": "hermes-windows-agent-secret-change-me",
+      "timeout": 30,
+      "description": "Laptop Windows"
+    }
+  }
+}

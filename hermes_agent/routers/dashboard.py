@@ -1,0 +1,185 @@
+"""Dashboard API endpoints, HTML pages via Jinja2 templates, and log export."""
+import csv
+import io
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+
+from hermes_agent.audit_logger import get_audit_logger
+
+router = APIRouter(tags=["dashboard"])
+_audit = get_audit_logger()
+
+_templates = None
+
+DEFAULT_ENDPOINTS = [
+    "/exec", "/file", "/file/delete", "/mouse/move", "/mouse/click",
+    "/mouse/doubleclick", "/mouse/scroll", "/mouse/position",
+    "/keyboard/type", "/keyboard/press", "/keyboard/hotkey",
+    "/window/active", "/window/list", "/window/focus", "/window/resize",
+    "/screenshot", "/processes", "/process/kill", "/system",
+    "/health", "/capabilities", "/dashboard", "/dashboard/logs",
+    "/dashboard/errors", "/dashboard/exec", "/api/logs", "/api/stats",
+]
+
+
+def init_templates(templates) -> None:
+    """Inject the Jinja2Templates instance from app.py."""
+    global _templates
+    _templates = templates
+
+
+def _render(page: str, request: Request, extra: Optional[dict] = None, data: Optional[dict] = None) -> HTMLResponse:
+    stats = _audit.get_stats()
+    if data is None:
+        data = _audit.get_logs(limit=50)
+    ctx = {
+        "request": request,
+        "stats": stats,
+        "endpoints": DEFAULT_ENDPOINTS,
+        "entries": data.get("entries", []),
+        "total": data.get("total", 0),
+        "offset": data.get("offset", 0),
+        "limit": data.get("limit", 50),
+    }
+    if extra:
+        ctx.update(extra)
+    return _templates.TemplateResponse(request, page, ctx)
+
+
+@router.get("/api/logs", summary="Get filtered audit log entries as JSON")
+async def api_logs(
+    count: int = Query(100, description="Number of entries to return"),
+    offset: int = Query(0, description="Pagination offset"),
+    status: Optional[str] = Query(None, description="Filter by status code or 'success'/'error'"),
+    endpoint: Optional[str] = Query(None, description="Filter by endpoint path"),
+    search: Optional[str] = Query(None, description="Full-text search across all fields"),
+):
+    """Return paginated and filtered audit log entries."""
+    return _audit.get_logs(
+        limit=count,
+        offset=offset,
+        endpoint_filter=endpoint,
+        status_filter=status,
+        search=search,
+    )
+
+
+@router.get("/api/stats", summary="Get aggregate audit statistics")
+async def api_stats():
+    """Return summary statistics from the audit log."""
+    return _audit.get_stats()
+
+
+@router.get("/api/logs/export", summary="Export audit logs as CSV or JSON")
+async def api_logs_export(
+    format: str = Query("csv", description="Export format: csv or json"),
+    count: int = Query(10000, description="Max entries to export"),
+    endpoint: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+):
+    """Download filtered audit logs as a CSV or JSON file."""
+    data = _audit.get_logs(
+        limit=count,
+        offset=0,
+        endpoint_filter=endpoint,
+        status_filter=status,
+        search=search,
+    )
+    entries = data.get("entries", [])
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+    if format == "json":
+        import json
+        content = json.dumps(entries, indent=2, default=str)
+        return StreamingResponse(
+            io.BytesIO(content.encode("utf-8")),
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename=hermes-logs-{ts}.json"},
+        )
+    else:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["timestamp", "method", "endpoint", "response_status", "duration_ms", "command_executed"])
+        for e in entries:
+            writer.writerow([
+                e.get("timestamp", ""),
+                e.get("method", ""),
+                e.get("endpoint", ""),
+                e.get("response_status", ""),
+                e.get("duration_ms", ""),
+                e.get("command_executed", ""),
+            ])
+        content = output.getvalue()
+        return StreamingResponse(
+            io.BytesIO(content.encode("utf-8-sig")),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=hermes-logs-{ts}.csv"},
+        )
+
+
+@router.post("/api/clear-logs", summary="Manually trigger log rotation")
+async def api_clear_logs():
+    """Remove old log entries (older than 7 days) if the log file exceeds 10 MiB."""
+    return _audit.clear_old_logs()
+
+
+@router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False, summary="Main dashboard page")
+async def dashboard_page(request: Request):
+    """Serve the main dashboard overview page."""
+    data = _audit.get_logs(limit=50)
+    return _render("pages/dashboard.html", request, {"active_page": "dashboard"}, data)
+
+
+@router.get("/dashboard/logs", response_class=HTMLResponse, include_in_schema=False, summary="Filtered logs page")
+async def dashboard_logs_page(
+    request: Request,
+    count: int = Query(50),
+    offset: int = Query(0),
+    status: Optional[str] = Query(None),
+    endpoint: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+):
+    """Serve the filtered logs dashboard page."""
+    data = _audit.get_logs(limit=count, offset=offset, endpoint_filter=endpoint, status_filter=status, search=search)
+    return _render("pages/dashboard.html", request, {
+        "active_page": "dashboard",
+        "endpoint_filter": endpoint or "",
+        "status_filter": status or "",
+        "search_query": search or "",
+    }, data)
+
+
+@router.get("/dashboard/errors", response_class=HTMLResponse, include_in_schema=False, summary="Errors only page")
+async def dashboard_errors_page(
+    request: Request,
+    count: int = Query(50),
+    offset: int = Query(0),
+    search: Optional[str] = Query(None),
+):
+    """Serve the errors-only dashboard page."""
+    data = _audit.get_logs(limit=count, offset=offset, status_filter="error", search=search)
+    return _render("pages/errors.html", request, {
+        "active_page": "errors",
+        "status_filter": "error",
+        "search_query": search or "",
+    }, data)
+
+
+@router.get("/dashboard/exec", response_class=HTMLResponse, include_in_schema=False, summary="Executed commands page")
+async def dashboard_exec_page(
+    request: Request,
+    count: int = Query(50),
+    offset: int = Query(0),
+    search: Optional[str] = Query(None),
+):
+    """Serve the executed-commands dashboard page."""
+    data = _audit.get_logs(limit=count, offset=offset, endpoint_filter="/exec", search=search)
+    return _render("pages/exec.html", request, {
+        "active_page": "exec",
+        "endpoint_filter": "/exec",
+        "search_query": search or "",
+    }, data)
