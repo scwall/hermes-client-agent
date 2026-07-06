@@ -4,12 +4,13 @@ import io
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from hermes_agent.audit_logger import get_audit_logger
+from hermes_agent.security import verify_local_or_token
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(tags=["dashboard"], dependencies=[Depends(verify_local_or_token)])
 _audit = get_audit_logger()
 
 _templates = None

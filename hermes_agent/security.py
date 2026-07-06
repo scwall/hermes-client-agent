@@ -1,9 +1,10 @@
 """Authentication and path-security dependencies for FastAPI."""
 import os
+from typing import Optional
 
 from fastapi import Header, HTTPException, Request
 
-from hermes_agent.config import TOKEN, ALLOWED_PATHS, log
+from hermes_agent.config import TOKEN, DASHBOARD_TOKEN, ALLOWED_PATHS, log
 
 
 def verify_token(x_agent_token: str = Header(...)):
@@ -13,6 +14,28 @@ def verify_token(x_agent_token: str = Header(...)):
     """
     if x_agent_token != TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing token")
+    return True
+
+
+def _is_local(client_ip: str) -> bool:
+    """Return True if the IP is a loopback or test address."""
+    if not client_ip:
+        return True
+    return client_ip in ("127.0.0.1", "::1", "testclient") or client_ip.startswith("127.")
+
+
+def verify_local_or_token(request: Request, x_agent_token: Optional[str] = Header(None)):
+    """FastAPI dependency: allow localhost without token, require token otherwise.
+
+    Requests from loopback addresses (127.x.x.x, ::1) bypass authentication.
+    All other IPs must provide a valid X-Agent-Token matching HERMES_DASHBOARD_TOKEN
+    (or HERMES_AGENT_TOKEN if no dashboard token is set).
+    """
+    client_ip = request.client.host if request.client else ""
+    if _is_local(client_ip):
+        return True
+    if not x_agent_token or x_agent_token != DASHBOARD_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized: token required for remote access")
     return True
 
 

@@ -131,7 +131,8 @@ The plugin auto-discovers agents listed in its configuration and exposes their e
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_AGENT_TOKEN` | *(required)* | Shared authentication token |
+| `HERMES_AGENT_TOKEN` | *(required)* | Shared authentication token for API endpoints |
+| `HERMES_DASHBOARD_TOKEN` | `HERMES_AGENT_TOKEN` | Optional separate token for dashboard access |
 | `HERMES_AGENT_HOST` | `0.0.0.0` | Listen interface |
 | `HERMES_AGENT_PORT` | `8765` | Listen port |
 | `HERMES_ALLOWED_PATHS` | `~`, `/home`, `C:\Users\` | File access whitelist |

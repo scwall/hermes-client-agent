@@ -11,6 +11,7 @@ except Exception:
 
 DEFAULT_TOKEN = "hermes-windows-agent-secret-change-me"
 TOKEN = os.environ.get("HERMES_AGENT_TOKEN", DEFAULT_TOKEN)
+DASHBOARD_TOKEN = os.environ.get("HERMES_DASHBOARD_TOKEN") or TOKEN
 
 _ALLOWED_ENV = os.environ.get("HERMES_ALLOWED_PATHS", "")
 if _ALLOWED_ENV:
