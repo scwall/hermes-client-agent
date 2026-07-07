@@ -1,85 +1,7 @@
 """Unit tests for the windows_control plugin config and multi-agent logic."""
-import json
-import tempfile
-from pathlib import Path
-
 import pytest
 
 import windows_control.tools as tools
-
-
-class TestLoadStateFallback:
-    """Tests for _load_state_fallback() — state.json parsing."""
-
-    def test_flat_format_auto_converted(self):
-        """Old flat state.json is converted to multi-agent format."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({
-                "agent_url": "http://192.168.1.4:8765",
-                "token": "test-token",
-                "timeout": 30,
-                "enabled": True,
-            }, f)
-            tmp = Path(f.name)
-
-        try:
-            tools.STATE_FILE = tmp
-            cfg = tools._load_state_fallback()
-            assert "agents" in cfg
-            assert "default" in cfg["agents"]
-            assert cfg["agents"]["default"]["url"] == "http://192.168.1.4:8765"
-            assert cfg["agents"]["default"]["token"] == "test-token"
-            assert cfg["default_agent"] == "default"
-        finally:
-            tmp.unlink(missing_ok=True)
-
-    def test_multi_agent_format_parsed(self):
-        """New multi-agent state.json is parsed correctly."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({
-                "agents": {
-                    "laptop": {"url": "http://1.1.1.1:8765", "token": "tok1", "timeout": 30},
-                    "server": {"url": "http://2.2.2.2:8765", "token": "tok2", "timeout": 20},
-                },
-                "default_agent": "laptop",
-            }, f)
-            tmp = Path(f.name)
-
-        try:
-            orig = tools.STATE_FILE
-            tools.STATE_FILE = tmp
-            cfg = tools._load_state_fallback()
-            assert len(cfg["agents"]) == 2
-            assert cfg["default_agent"] == "laptop"
-        finally:
-            tools.STATE_FILE = orig
-            tmp.unlink(missing_ok=True)
-
-    def test_no_state_file_returns_defaults(self):
-        """No state.json → default config returned."""
-        orig = tools.STATE_FILE
-        tools.STATE_FILE = Path("/nonexistent/state.json")
-        try:
-            cfg = tools._load_state_fallback()
-            assert "agents" in cfg
-            assert "default" in cfg["agents"]
-        finally:
-            tools.STATE_FILE = orig
-
-    def test_invalid_json_returns_defaults(self):
-        """Corrupt state.json → default config."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write("not json {{{")
-            tmp = Path(f.name)
-
-        try:
-            orig = tools.STATE_FILE
-            tools.STATE_FILE = tmp
-            cfg = tools._load_state_fallback()
-            assert "agents" in cfg
-        finally:
-            tools.STATE_FILE = orig
-            tmp.unlink(missing_ok=True)
 
 
 class TestGetAgentConfig:
@@ -139,12 +61,3 @@ class TestMaskToken:
 
     def test_empty_token(self):
         assert tools._mask_token("") == ""
-
-
-class TestLoadConfig:
-    """Tests for _load_config() — config.yaml vs state.json."""
-
-    def test_returns_config_and_source(self):
-        config, source = tools._load_config()
-        assert "agents" in config
-        assert source in ("config.yaml", "state.json")

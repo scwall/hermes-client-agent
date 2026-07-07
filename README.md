@@ -125,7 +125,7 @@ The `windows_control/` directory contains a native Hermes plugin that registers 
 cp -r windows_control/ ~/.hermes/plugins/windows_control/
 ```
 
-### Multi-agent config (recommended)
+### Multi-agent configuration
 
 Configure agents in Hermes' `config.yaml`:
 
@@ -149,25 +149,6 @@ Set tokens in Hermes' `.env`:
 LAPTOP_TOKEN=hermes-windows-agent-secret-change-me
 FRAMEWORK_TOKEN=token-pour-framework
 ```
-
-### Single-agent fallback (state.json)
-
-If `config.yaml` is not available, the plugin falls back to `state.json`:
-
-```json
-{
-    "agents": {
-        "laptop": {
-            "url": "http://192.168.1.4:8765",
-            "token": "hermes-windows-agent-secret-change-me",
-            "timeout": 30
-        }
-    },
-    "default_agent": "laptop"
-}
-```
-
-Old flat `state.json` format (`agent_url`, `token`) is auto-converted.
 
 ### Usage
 

@@ -3,13 +3,9 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 from typing import Any
 
 import requests
-
-PLUGIN_DIR = Path(__file__).parent
-STATE_FILE = PLUGIN_DIR / "state.json"
 
 _ctx = None
 
@@ -18,45 +14,6 @@ def set_plugin_context(ctx: Any) -> None:
     """Store the Hermes plugin context for config resolution."""
     global _ctx
     _ctx = ctx
-
-
-def _load_state_fallback() -> dict[str, Any]:
-    """Load agent configuration from state.json (flat or multi-agent format)."""
-    if not STATE_FILE.exists():
-        return _default_agents()
-    try:
-        with open(STATE_FILE) as f:
-            stored = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return _default_agents()
-
-    # Auto-convert flat format to multi-agent format
-    if "agents" not in stored:
-        stored = {
-            "agents": {
-                "default": {
-                    "url": stored.get("agent_url", "http://192.168.1.100:8765"),
-                    "token": stored.get("token", "hermes-windows-agent-secret-token-change-me"),
-                    "timeout": stored.get("timeout", 15),
-                }
-            },
-            "default_agent": "default",
-        }
-
-    return stored
-
-
-def _default_agents() -> dict[str, Any]:
-    return {
-        "agents": {
-            "default": {
-                "url": "http://192.168.1.100:8765",
-                "token": "hermes-windows-agent-secret-token-change-me",
-                "timeout": 15,
-            }
-        },
-        "default_agent": "default",
-    }
 
 
 def _load_config_from_ctx() -> dict[str, Any] | None:
@@ -79,11 +36,15 @@ def _clean_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_config() -> tuple[dict[str, Any], str]:
-    """Load configuration, trying ctx.config first, falling back to state.json."""
+    """Load configuration from ctx.config (config.yaml)."""
     cfg = _load_config_from_ctx()
     if cfg:
         return cfg, "config.yaml"
-    return _load_state_fallback(), "state.json"
+    msg = (
+        "No agents configured. Add a windows_control section to config.yaml. "
+        "Format: https://github.com/scwall/hermes-client-agent#hermes-plugin"
+    )
+    raise RuntimeError(msg)
 
 
 def _get_agent_config(config: dict[str, Any], agent: str | None = None) -> dict[str, Any]:
