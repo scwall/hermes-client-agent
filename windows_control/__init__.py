@@ -65,11 +65,14 @@ def register(ctx: Any) -> None:
     set_plugin_context(ctx)
     ctx.register_hook("on_session_start", on_session_start)
 
-    from .tools import _load_config as _lc
-    config, source = _lc()
-    agents = config.get("agents", {})
-    names = ", ".join(agents.keys()) if agents else "(none)"
-    print(f"[windows_control] Loaded {len(agents)} agent(s) from {source}: {names}")
+    try:
+        from .tools import _load_config as _lc
+        config, source = _lc()
+        agents = config.get("agents", {})
+        names = ", ".join(agents.keys()) if agents else "(none)"
+        print(f"[windows_control] Loaded {len(agents)} agent(s) from {source}: {names}")
+    except RuntimeError as exc:
+        print(f"[windows_control] {exc}")
 
     tools: list[tuple[str, str, dict[str, Any], Any]] = [
         ("windows_health", "windows", WINDOWS_HEALTH_SCHEMA, _health_handler),

@@ -17,14 +17,14 @@ def set_plugin_context(ctx: Any) -> None:
 
 
 def _load_config_from_ctx() -> dict[str, Any] | None:
-    """Try to load config via ctx.config() (config.yaml)."""
-    if _ctx is not None and hasattr(_ctx, "config") and callable(_ctx.config):
-        try:
-            cfg = _ctx.config()
-            if "windows_control" in cfg:
-                return _clean_config(cfg["windows_control"])
-        except Exception:
-            pass
+    """Load windows_control section from Hermes config.yaml via hermes_cli.config."""
+    try:
+        from hermes_cli.config import load_config
+        cfg = load_config()
+        if isinstance(cfg, dict) and "windows_control" in cfg:
+            return _clean_config(cfg["windows_control"])
+    except Exception:
+        pass
     return None
 
 
@@ -296,7 +296,12 @@ def on_session_start(ctx: Any = None, **kwargs: Any) -> None:
     if ctx:
         set_plugin_context(ctx)
 
-    config, source = _load_config()
+    try:
+        config, source = _load_config()
+    except RuntimeError as exc:
+        print(f"[windows_control] {exc}")
+        return
+
     agents = config.get("agents", {})
     agent_names = ", ".join(agents.keys()) if agents else "(none)"
     print(f"[windows_control] Loaded {len(agents)} agent(s) from {source}: {agent_names}")
