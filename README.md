@@ -122,7 +122,7 @@ Download `hermes-agent.exe` from the [Releases](https://github.com/scwall/hermes
 The `windows_control/` directory contains a native Hermes plugin that registers 22 tools.
 
 ```bash
-cp -r windows_control/ ~/.hermes/plugins/windows_control/
+cp -r windows_control/ <hermes-plugins-dir>/windows_control/
 ```
 
 ### Multi-agent configuration
