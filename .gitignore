@@ -27,3 +27,4 @@ __pycache__/
 
 # Binaries
 *.exe
+*.bak
