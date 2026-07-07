@@ -190,3 +190,88 @@ class TestAuditMiddleware:
         auditor = __import__("hermes_agent.audit_logger", fromlist=["get_audit_logger"]).get_audit_logger()
         result = auditor.get_logs(status_filter="error", limit=50)
         assert result["total"] > 0
+
+
+class TestAuditHelpers:
+    """Tests for audit helper functions."""
+
+    def test_sanitize_body_removes_sensitive_keys(self):
+        from hermes_agent.audit_logger import _sanitize_body
+        body = {"command": "hostname", "password": "secret123", "token": "abc"}
+        sanitized = _sanitize_body(body)
+        assert sanitized is not None
+        assert sanitized["command"] == "hostname"
+        assert sanitized["password"] == "***"
+        assert sanitized["token"] == "***"
+
+    def test_sanitize_body_handles_none(self):
+        from hermes_agent.audit_logger import _sanitize_body
+        assert _sanitize_body(None) is None
+
+    def test_sanitize_body_preserves_other_keys(self):
+        from hermes_agent.audit_logger import _sanitize_body
+        body = {"command": "dir", "shell": "cmd", "secret": "xyz", "nested": {"a": 1}}
+        sanitized = _sanitize_body(body)
+        assert sanitized is not None
+        assert sanitized["command"] == "dir"
+        assert sanitized["shell"] == "cmd"
+        assert sanitized["secret"] == "***"
+        assert sanitized["nested"] == {"a": 1}
+
+    def test_extract_body_async_returns_none_for_get(self):
+        import asyncio
+        from unittest.mock import MagicMock
+        from hermes_agent.audit_logger import _extract_body_async
+
+        request = MagicMock()
+        request.method = "GET"
+
+        result = asyncio.run(_extract_body_async(request))
+        assert result is None
+
+    def test_get_logs_ip_filter(self):
+        from hermes_agent.audit_logger import AuditLogger
+        import tempfile
+        from pathlib import Path
+
+        tmpdir = tempfile.mkdtemp()
+        log_path = Path(tmpdir) / "ip_filter_test.jsonl"
+        logger = AuditLogger(log_path=log_path)
+
+        logger.log_request(endpoint="/a", method="GET", source_ip="192.168.1.10", response_status=200, duration_ms=10)
+        logger.log_request(endpoint="/b", method="GET", source_ip="192.168.1.20", response_status=200, duration_ms=10)
+        logger.log_request(endpoint="/c", method="GET", source_ip="10.0.0.1", response_status=200, duration_ms=10)
+
+        result = logger.get_logs(ip_filter="192.168")
+        assert result["total"] == 2
+
+        result2 = logger.get_logs(ip_filter="10.0.0.1")
+        assert result2["total"] == 1
+
+        result3 = logger.get_logs(ip_filter="99.99.99.99")
+        assert result3["total"] == 0
+
+        log_path.unlink(missing_ok=True)
+        Path(tmpdir).rmdir()
+
+    def test_get_stats_top_ips(self):
+        from hermes_agent.audit_logger import AuditLogger
+        import tempfile
+        from pathlib import Path
+
+        tmpdir = tempfile.mkdtemp()
+        log_path = Path(tmpdir) / "top_ips_test.jsonl"
+        logger = AuditLogger(log_path=log_path)
+
+        for _ in range(5):
+            logger.log_request(endpoint="/a", method="GET", source_ip="192.168.1.1", response_status=200, duration_ms=10)
+        for _ in range(3):
+            logger.log_request(endpoint="/a", method="GET", source_ip="10.0.0.1", response_status=200, duration_ms=10)
+
+        stats = logger.get_stats()
+        assert len(stats["top_ips"]) == 2
+        assert stats["top_ips"][0]["count"] == 5
+        assert stats["top_ips"][0]["ip"] == "192.168.1.1"
+
+        log_path.unlink(missing_ok=True)
+        Path(tmpdir).rmdir()

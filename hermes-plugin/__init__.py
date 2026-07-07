@@ -3,7 +3,6 @@
 Remote Windows PC control via HTTP REST API.
 Communicates with a FastAPI agent running on a Windows machine.
 """
-
 from __future__ import annotations
 
 import json
@@ -54,14 +53,14 @@ def _save_state(state: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def _make_request(
-    method: str,
-    path: str,
-    json_data: dict[str, Any] | None = None,
-    params: dict[str, Any] | None = None,
+        method: str,
+        path: str,
+        json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
 ) -> str:
     """Make an HTTP request to the Windows agent.
 
-    Returns the JSON response dict, or an error dict on failure.
+    Returns a JSON string (response or error).
     """
     state = _load_state()
     url = f"{state['agent_url'].rstrip('/')}{path}"
@@ -89,7 +88,7 @@ def _make_request(
 
 
 # ---------------------------------------------------------------------------
-# Tool handler signatures (all accept args: dict)
+# Tool handlers
 # ---------------------------------------------------------------------------
 
 def _health_handler(args: dict[str, Any], **kwargs: Any) -> str:
@@ -104,20 +103,26 @@ def _capabilities_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _exec_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /exec"""
+    command = str(args.get("command", ""))
+    shell = str(args.get("shell", "cmd"))
+    timeout = int(args.get("timeout", 30))
     return _make_request(
         "POST",
         "/exec",
         json_data={
-            "command": args["command"],
-            "shell": args.get("shell", "cmd"),
-            "timeout": args.get("timeout", 30),
+            "command": command,
+            "shell": shell,
+            "timeout": timeout,
         },
     )
 
 
 def _file_read_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """GET /file"""
-    return _make_request("GET", "/file", params={"path": args["path"]})
+    path = args.get("path", "")
+    if isinstance(path, dict):
+        path = path.get("path", "")
+    return _make_request("GET", "/file", params={"path": str(path)})
 
 
 def _file_write_handler(args: dict[str, Any], **kwargs: Any) -> str:
@@ -137,30 +142,28 @@ def _file_delete_handler(args: dict[str, Any], **kwargs: Any) -> str:
 def _mouse_move_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /mouse/move"""
     return _make_request(
-        "POST", "/mouse/move", json_data={"x": args["x"], "y": args["y"]}
+        "POST", "/mouse/move", json_data={"x": int(args["x"]), "y": int(args["y"])}
     )
 
 
 def _mouse_click_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /mouse/click"""
-    return _make_request(
-        "POST",
-        "/mouse/click",
-        json_data={
-            "button": args.get("button", "left"),
-            "x": args.get("x"),
-            "y": args.get("y"),
-        },
-    )
+    body: dict[str, Any] = {"button": args.get("button", "left")}
+    if args.get("x") is not None:
+        body["x"] = int(args["x"])
+    if args.get("y") is not None:
+        body["y"] = int(args["y"])
+    return _make_request("POST", "/mouse/click", json_data=body)
 
 
 def _mouse_doubleclick_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /mouse/doubleclick"""
-    return _make_request(
-        "POST",
-        "/mouse/doubleclick",
-        json_data={"x": args.get("x"), "y": args.get("y")},
-    )
+    body: dict[str, Any] = {}
+    if args.get("x") is not None:
+        body["x"] = int(args["x"])
+    if args.get("y") is not None:
+        body["y"] = int(args["y"])
+    return _make_request("POST", "/mouse/doubleclick", json_data=body)
 
 
 def _mouse_scroll_handler(args: dict[str, Any], **kwargs: Any) -> str:
@@ -169,8 +172,8 @@ def _mouse_scroll_handler(args: dict[str, Any], **kwargs: Any) -> str:
         "POST",
         "/mouse/scroll",
         json_data={
-            "direction": args.get("direction", "up"),
-            "clicks": args.get("clicks", 3),
+            "direction": str(args.get("direction", "up")),
+            "clicks": int(args.get("clicks", 3)),
         },
     )
 
@@ -182,22 +185,25 @@ def _mouse_position_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _keyboard_type_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /keyboard/type"""
+    text = args.get("text", "")
+    if isinstance(text, dict):
+        text = text.get("text", "")
     return _make_request(
-        "POST", "/keyboard/type", json_data={"text": args["text"]}
+        "POST", "/keyboard/type", json_data={"text": str(text)}
     )
 
 
 def _keyboard_press_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /keyboard/press"""
     return _make_request(
-        "POST", "/keyboard/press", json_data={"key": args["key"]}
+        "POST", "/keyboard/press", json_data={"key": str(args["key"])}
     )
 
 
 def _keyboard_hotkey_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /keyboard/hotkey"""
     return _make_request(
-        "POST", "/keyboard/hotkey", json_data={"keys": args["keys"]}
+        "POST", "/keyboard/hotkey", json_data={"keys": list(args["keys"])}
     )
 
 
@@ -206,7 +212,7 @@ def _window_focus_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request(
         "POST",
         "/window/focus",
-        json_data={"title_substring": args["title_substring"]},
+        json_data={"title_substring": str(args["title_substring"])},
     )
 
 
@@ -222,9 +228,12 @@ def _window_list_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _screenshot_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """GET /screenshot"""
-    params = {}
-    if args.get("region"):
-        params["region"] = args["region"]
+    params: dict[str, Any] = {}
+    region = args.get("region")
+    if region:
+        if isinstance(region, dict):
+            region = region.get("region", "")
+        params["region"] = str(region)
     return _make_request("GET", "/screenshot", params=params)
 
 
@@ -236,7 +245,7 @@ def _processes_handler(args: dict[str, Any], **kwargs: Any) -> str:
 def _process_kill_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /process/kill"""
     return _make_request(
-        "POST", "/process/kill", json_data={"pid": args["pid"]}
+        "POST", "/process/kill", json_data={"pid": int(args["pid"])}
     )
 
 
@@ -246,27 +255,44 @@ def _system_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tool schemas
+# Tool schemas  (Hermes format: name + description + parameters{...})
 # ---------------------------------------------------------------------------
 
-WINDOWS_HEALTH_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {},
-    "description": "Check the health status of the remote Windows agent.",
-}
+def _s(name: str, desc: str, properties: dict[str, Any],
+       required: list[str] | None = None) -> dict[str, Any]:
+    """Build a Hermes-compliant tool schema."""
+    schema: dict[str, Any] = {
+        "name": name,
+        "description": desc,
+        "parameters": {
+            "type": "object",
+            "properties": properties,
+        },
+    }
+    if required:
+        schema["parameters"]["required"] = required
+    return schema
 
-WINDOWS_CAPABILITIES_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {},
-    "description": "List available modules and endpoints on the remote Windows agent.",
-}
 
-WINDOWS_EXEC_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_HEALTH_SCHEMA = _s(
+    "windows_health",
+    "Check the health status of the remote Windows agent.",
+    {},
+)
+
+WINDOWS_CAPABILITIES_SCHEMA = _s(
+    "windows_capabilities",
+    "List available modules and endpoints on the remote Windows agent.",
+    {},
+)
+
+WINDOWS_EXEC_SCHEMA = _s(
+    "windows_exec",
+    "Execute a command on the remote Windows PC via cmd or powershell.",
+    {
         "command": {
             "type": "string",
-            "description": "Command to execute on the remote Windows PC (e.g., 'dir', 'ipconfig', 'whoami').",
+            "description": "Command to execute on the remote PC (e.g., 'dir', 'ipconfig').",
         },
         "shell": {
             "type": "string",
@@ -279,64 +305,63 @@ WINDOWS_EXEC_SCHEMA: dict[str, Any] = {
             "default": 30,
         },
     },
-    "required": ["command"],
-}
+    ["command"],
+)
 
-WINDOWS_FILE_READ_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_FILE_READ_SCHEMA = _s(
+    "windows_file_read",
+    "Read a file from the remote Windows PC.",
+    {
         "path": {
             "type": "string",
-            "description": "Full path to the file on the remote Windows PC (e.g., 'C:\\\\Users\\\\admin\\\\doc.txt').",
-        }
+            "description": "Full path to the file (e.g., 'C:\\Users\\admin\\doc.txt').",
+        },
     },
-    "required": ["path"],
-}
+    ["path"],
+)
 
-WINDOWS_FILE_WRITE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_FILE_WRITE_SCHEMA = _s(
+    "windows_file_write",
+    "Write content to a file on the remote Windows PC.",
+    {
         "path": {
             "type": "string",
-            "description": "Full path to the file to write on the remote Windows PC.",
+            "description": "Full path to the file to write.",
         },
         "content": {
             "type": "string",
             "description": "Text content to write to the file.",
         },
     },
-    "required": ["path", "content"],
-}
+    ["path", "content"],
+)
 
-WINDOWS_FILE_DELETE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_FILE_DELETE_SCHEMA = _s(
+    "windows_file_delete",
+    "Delete a file from the remote Windows PC.",
+    {
         "path": {
             "type": "string",
-            "description": "Full path to the file to delete on the remote Windows PC.",
-        }
-    },
-    "required": ["path"],
-}
-
-WINDOWS_MOUSE_MOVE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "x": {
-            "type": "integer",
-            "description": "Absolute X coordinate (screen pixel).",
-        },
-        "y": {
-            "type": "integer",
-            "description": "Absolute Y coordinate (screen pixel).",
+            "description": "Full path to the file to delete.",
         },
     },
-    "required": ["x", "y"],
-}
+    ["path"],
+)
 
-WINDOWS_MOUSE_CLICK_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_MOUSE_MOVE_SCHEMA = _s(
+    "windows_mouse_move",
+    "Move the mouse cursor to absolute coordinates on the remote PC.",
+    {
+        "x": {"type": "integer", "description": "Absolute X coordinate (pixels)."},
+        "y": {"type": "integer", "description": "Absolute Y coordinate (pixels)."},
+    },
+    ["x", "y"],
+)
+
+WINDOWS_MOUSE_CLICK_SCHEMA = _s(
+    "windows_mouse_click",
+    "Click a mouse button, optionally at specific coordinates.",
+    {
         "button": {
             "type": "string",
             "description": "Mouse button: 'left' (default), 'right', or 'middle'.",
@@ -344,18 +369,19 @@ WINDOWS_MOUSE_CLICK_SCHEMA: dict[str, Any] = {
         },
         "x": {
             "type": "integer",
-            "description": "X coordinate to move to before clicking (null = click at current position).",
+            "description": "X coordinate (null = click at current position).",
         },
         "y": {
             "type": "integer",
-            "description": "Y coordinate to move to before clicking (null = click at current position).",
+            "description": "Y coordinate (null = click at current position).",
         },
     },
-}
+)
 
-WINDOWS_MOUSE_DOUBLECLICK_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_MOUSE_DOUBLECLICK_SCHEMA = _s(
+    "windows_mouse_doubleclick",
+    "Double-click at the current or specified coordinates.",
+    {
         "x": {
             "type": "integer",
             "description": "X coordinate (null = current position).",
@@ -365,11 +391,12 @@ WINDOWS_MOUSE_DOUBLECLICK_SCHEMA: dict[str, Any] = {
             "description": "Y coordinate (null = current position).",
         },
     },
-}
+)
 
-WINDOWS_MOUSE_SCROLL_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_MOUSE_SCROLL_SCHEMA = _s(
+    "windows_mouse_scroll",
+    "Scroll the mouse wheel up or down.",
+    {
         "direction": {
             "type": "string",
             "description": "Scroll direction: 'up' (default) or 'down'.",
@@ -381,103 +408,109 @@ WINDOWS_MOUSE_SCROLL_SCHEMA: dict[str, Any] = {
             "default": 3,
         },
     },
-}
+)
 
-WINDOWS_MOUSE_POSITION_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {},
-    "description": "Get the current mouse cursor position (x, y) on the remote Windows PC.",
-}
+WINDOWS_MOUSE_POSITION_SCHEMA = _s(
+    "windows_mouse_position",
+    "Get the current mouse cursor position (x, y) on the remote PC.",
+    {},
+)
 
-WINDOWS_KEYBOARD_TYPE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_KEYBOARD_TYPE_SCHEMA = _s(
+    "windows_keyboard_type",
+    "Type a text string on the remote PC.",
+    {
         "text": {
             "type": "string",
-            "description": "Text string to type on the remote Windows PC.",
-        }
+            "description": "Text to type.",
+        },
     },
-    "required": ["text"],
-}
+    ["text"],
+)
 
-WINDOWS_KEYBOARD_PRESS_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_KEYBOARD_PRESS_SCHEMA = _s(
+    "windows_keyboard_press",
+    "Press a single key on the remote PC.",
+    {
         "key": {
             "type": "string",
-            "description": "Key to press (e.g., 'enter', 'escape', 'tab', 'a', 'f5', 'shift', 'ctrl').",
-        }
+            "description": "Key to press (e.g., 'enter', 'escape', 'tab', 'f5').",
+        },
     },
-    "required": ["key"],
-}
+    ["key"],
+)
 
-WINDOWS_KEYBOARD_HOTKEY_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_KEYBOARD_HOTKEY_SCHEMA = _s(
+    "windows_keyboard_hotkey",
+    "Press a key combination (hotkey) on the remote PC.",
+    {
         "keys": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "List of keys for the hotkey combination (e.g., ['ctrl', 'c'] for copy, ['alt', 'tab']).",
-        }
+            "description": "List of keys (e.g., ['ctrl', 'c'] for copy).",
+        },
     },
-    "required": ["keys"],
-}
+    ["keys"],
+)
 
-WINDOWS_WINDOW_FOCUS_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_WINDOW_FOCUS_SCHEMA = _s(
+    "windows_window_focus",
+    "Bring a window into focus by its title substring.",
+    {
         "title_substring": {
             "type": "string",
-            "description": "Substring of the window title to bring to focus (e.g., 'Notepad', 'Chrome').",
-        }
+            "description": "Substring of the window title (e.g., 'Notepad').",
+        },
     },
-    "required": ["title_substring"],
-}
+    ["title_substring"],
+)
 
-WINDOWS_WINDOW_ACTIVE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {},
-    "description": "Get information about the currently active window on the remote Windows PC.",
-}
+WINDOWS_WINDOW_ACTIVE_SCHEMA = _s(
+    "windows_window_active",
+    "Get info about the currently active window on the remote PC.",
+    {},
+)
 
-WINDOWS_WINDOW_LIST_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {},
-    "description": "List all visible windows on the remote Windows PC.",
-}
+WINDOWS_WINDOW_LIST_SCHEMA = _s(
+    "windows_window_list",
+    "List all visible windows on the remote PC.",
+    {},
+)
 
-WINDOWS_SCREENSHOT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_SCREENSHOT_SCHEMA = _s(
+    "windows_screenshot",
+    "Capture a screenshot of the remote PC's display.",
+    {
         "region": {
             "type": "string",
-            "description": "Optional screenshot region as 'x,y,w,h' (e.g., '0,0,800,600'). Captures full screen if omitted.",
-        }
+            "description": "Optional region as 'x,y,w,h' (e.g., '0,0,800,600'). Full screen if omitted.",
+        },
     },
-}
+)
 
-WINDOWS_PROCESSES_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {},
-    "description": "List running processes on the remote Windows PC.",
-}
+WINDOWS_PROCESSES_SCHEMA = _s(
+    "windows_processes",
+    "List running processes on the remote PC.",
+    {},
+)
 
-WINDOWS_PROCESS_KILL_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
+WINDOWS_PROCESS_KILL_SCHEMA = _s(
+    "windows_process_kill",
+    "Terminate a process by its PID.",
+    {
         "pid": {
             "type": "integer",
             "description": "PID of the process to terminate.",
-        }
+        },
     },
-    "required": ["pid"],
-}
+    ["pid"],
+)
 
-WINDOWS_SYSTEM_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {},
-    "description": "Get system information (hostname, OS version, CPU count, RAM, etc.) from the remote Windows PC.",
-}
+WINDOWS_SYSTEM_SCHEMA = _s(
+    "windows_system",
+    "Get system information from the remote PC (hostname, OS, CPU, RAM, disks, etc.).",
+    {},
+)
 
 
 # ---------------------------------------------------------------------------
@@ -519,129 +552,34 @@ def register(ctx: Any) -> None:
     """Register the windows-control plugin with the Hermes runtime."""
     ctx.register_hook("on_session_start", on_session_start)
 
-    ctx.register_tool(
-        "windows_health",
-        "windows",
-        WINDOWS_HEALTH_SCHEMA,
-        _health_handler,
-    )
-    ctx.register_tool(
-        "windows_capabilities",
-        "windows",
-        WINDOWS_CAPABILITIES_SCHEMA,
-        _capabilities_handler,
-    )
-    ctx.register_tool(
-        "windows_exec",
-        "windows",
-        WINDOWS_EXEC_SCHEMA,
-        _exec_handler,
-    )
-    ctx.register_tool(
-        "windows_file_read",
-        "windows",
-        WINDOWS_FILE_READ_SCHEMA,
-        _file_read_handler,
-    )
-    ctx.register_tool(
-        "windows_file_write",
-        "windows",
-        WINDOWS_FILE_WRITE_SCHEMA,
-        _file_write_handler,
-    )
-    ctx.register_tool(
-        "windows_file_delete",
-        "windows",
-        WINDOWS_FILE_DELETE_SCHEMA,
-        _file_delete_handler,
-    )
-    ctx.register_tool(
-        "windows_mouse_move",
-        "windows",
-        WINDOWS_MOUSE_MOVE_SCHEMA,
-        _mouse_move_handler,
-    )
-    ctx.register_tool(
-        "windows_mouse_click",
-        "windows",
-        WINDOWS_MOUSE_CLICK_SCHEMA,
-        _mouse_click_handler,
-    )
-    ctx.register_tool(
-        "windows_mouse_doubleclick",
-        "windows",
-        WINDOWS_MOUSE_DOUBLECLICK_SCHEMA,
-        _mouse_doubleclick_handler,
-    )
-    ctx.register_tool(
-        "windows_mouse_scroll",
-        "windows",
-        WINDOWS_MOUSE_SCROLL_SCHEMA,
-        _mouse_scroll_handler,
-    )
-    ctx.register_tool(
-        "windows_mouse_position",
-        "windows",
-        WINDOWS_MOUSE_POSITION_SCHEMA,
-        _mouse_position_handler,
-    )
-    ctx.register_tool(
-        "windows_keyboard_type",
-        "windows",
-        WINDOWS_KEYBOARD_TYPE_SCHEMA,
-        _keyboard_type_handler,
-    )
-    ctx.register_tool(
-        "windows_keyboard_press",
-        "windows",
-        WINDOWS_KEYBOARD_PRESS_SCHEMA,
-        _keyboard_press_handler,
-    )
-    ctx.register_tool(
-        "windows_keyboard_hotkey",
-        "windows",
-        WINDOWS_KEYBOARD_HOTKEY_SCHEMA,
-        _keyboard_hotkey_handler,
-    )
-    ctx.register_tool(
-        "windows_window_focus",
-        "windows",
-        WINDOWS_WINDOW_FOCUS_SCHEMA,
-        _window_focus_handler,
-    )
-    ctx.register_tool(
-        "windows_window_active",
-        "windows",
-        WINDOWS_WINDOW_ACTIVE_SCHEMA,
-        _window_active_handler,
-    )
-    ctx.register_tool(
-        "windows_window_list",
-        "windows",
-        WINDOWS_WINDOW_LIST_SCHEMA,
-        _window_list_handler,
-    )
-    ctx.register_tool(
-        "windows_screenshot",
-        "windows",
-        WINDOWS_SCREENSHOT_SCHEMA,
-        _screenshot_handler,
-    )
-    ctx.register_tool(
-        "windows_processes",
-        "windows",
-        WINDOWS_PROCESSES_SCHEMA,
-        _processes_handler,
-    )
-    ctx.register_tool(
-        "windows_process_kill",
-        "windows",
-        WINDOWS_PROCESS_KILL_SCHEMA,
-        _process_kill_handler,
-    )
-    ctx.register_tool(
-        "windows_system",
-        "windows",
-        WINDOWS_SYSTEM_SCHEMA,
-        _system_handler,
-    )
+    tools: list[tuple[str, str, dict[str, Any], Any]] = [
+        ("windows_health", "windows", WINDOWS_HEALTH_SCHEMA, _health_handler),
+        ("windows_capabilities", "windows", WINDOWS_CAPABILITIES_SCHEMA, _capabilities_handler),
+        ("windows_exec", "windows", WINDOWS_EXEC_SCHEMA, _exec_handler),
+        ("windows_file_read", "windows", WINDOWS_FILE_READ_SCHEMA, _file_read_handler),
+        ("windows_file_write", "windows", WINDOWS_FILE_WRITE_SCHEMA, _file_write_handler),
+        ("windows_file_delete", "windows", WINDOWS_FILE_DELETE_SCHEMA, _file_delete_handler),
+        ("windows_mouse_move", "windows", WINDOWS_MOUSE_MOVE_SCHEMA, _mouse_move_handler),
+        ("windows_mouse_click", "windows", WINDOWS_MOUSE_CLICK_SCHEMA, _mouse_click_handler),
+        ("windows_mouse_doubleclick", "windows", WINDOWS_MOUSE_DOUBLECLICK_SCHEMA, _mouse_doubleclick_handler),
+        ("windows_mouse_scroll", "windows", WINDOWS_MOUSE_SCROLL_SCHEMA, _mouse_scroll_handler),
+        ("windows_mouse_position", "windows", WINDOWS_MOUSE_POSITION_SCHEMA, _mouse_position_handler),
+        ("windows_keyboard_type", "windows", WINDOWS_KEYBOARD_TYPE_SCHEMA, _keyboard_type_handler),
+        ("windows_keyboard_press", "windows", WINDOWS_KEYBOARD_PRESS_SCHEMA, _keyboard_press_handler),
+        ("windows_keyboard_hotkey", "windows", WINDOWS_KEYBOARD_HOTKEY_SCHEMA, _keyboard_hotkey_handler),
+        ("windows_window_focus", "windows", WINDOWS_WINDOW_FOCUS_SCHEMA, _window_focus_handler),
+        ("windows_window_active", "windows", WINDOWS_WINDOW_ACTIVE_SCHEMA, _window_active_handler),
+        ("windows_window_list", "windows", WINDOWS_WINDOW_LIST_SCHEMA, _window_list_handler),
+        ("windows_screenshot", "windows", WINDOWS_SCREENSHOT_SCHEMA, _screenshot_handler),
+        ("windows_processes", "windows", WINDOWS_PROCESSES_SCHEMA, _processes_handler),
+        ("windows_process_kill", "windows", WINDOWS_PROCESS_KILL_SCHEMA, _process_kill_handler),
+        ("windows_system", "windows", WINDOWS_SYSTEM_SCHEMA, _system_handler),
+    ]
+
+    for name, toolset, schema, handler in tools:
+        ctx.register_tool(
+            name=name,
+            toolset=toolset,
+            schema=schema,
+            handler=handler,
+        )

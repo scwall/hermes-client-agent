@@ -24,11 +24,22 @@ class FileDeleteRequest(BaseModel):
 
 
 @router.get("/file", summary="Read a file from disk")
-async def file_read(request: Request, path: str = Query(..., description="Absolute path to read")):
+async def file_read_get(request: Request, path: str = Query(..., description="Absolute path to read")):
     """Return the full text content of the file at the given path.
 
     The path must be within the allowed directories defined by HERMES_ALLOWED_PATHS.
     """
+    return _read_file(path, request)
+
+
+@router.get("/file/read", summary="Read a file from disk (alias)")
+async def file_read_alias(request: Request, path: str = Query(..., description="Absolute path to read")):
+    """Alias for GET /file — return the full text content of the file."""
+    return _read_file(path, request)
+
+
+def _read_file(path: str, request: Request) -> dict:
+    """Shared file read logic for GET /file and GET /file/read."""
     check_path_allowed(path, request)
     try:
         content = Path(path).read_text(encoding="utf-8", errors="replace")

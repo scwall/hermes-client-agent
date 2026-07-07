@@ -100,6 +100,18 @@ class TestFileEndpoints:
         )
         assert resp.status_code == 403
 
+    def test_file_read_alias(self):
+        """GET /file/read should return same content as GET /file."""
+        import os
+        test_path = os.path.join(os.path.expanduser("~"), "hermes-test-alias.txt")
+        client.put("/file", json={"path": test_path, "content": "alias-test"}, headers=AUTH)
+        resp1 = client.get("/file", params={"path": test_path}, headers=AUTH)
+        resp2 = client.get("/file/read", params={"path": test_path}, headers=AUTH)
+        assert resp1.status_code == 200
+        assert resp2.status_code == 200
+        assert resp1.json()["content"] == resp2.json()["content"] == "alias-test"
+        client.post("/file/delete", json={"path": test_path}, headers=AUTH)
+
 
 class TestSystemEndpoint:
     """Tests for GET /system."""

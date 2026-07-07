@@ -217,6 +217,63 @@ def get_audit_logger() -> AuditLogger:
     return _audit_logger
 
 
+def _extract_body(request: Request) -> Optional[dict[str, Any]]:
+    """Try to parse the request body as JSON for POST/PUT requests."""
+    if request.method not in ("POST", "PUT", "PATCH"):
+        return None
+    try:
+        body_bytes = request.body()
+    except Exception:
+        return None
+    try:
+        body_text = body_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    if not body_text:
+        return None
+    try:
+        data = json.loads(body_text)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
+def _sanitize_body(body: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Return a copy of the body with sensitive fields masked."""
+    if not body:
+        return body
+    sanitized = dict(body)
+    for key in ("password", "token", "secret", "api_key", "apikey"):
+        if key in sanitized:
+            sanitized[key] = "***"
+    return sanitized
+
+
+async def _extract_body_async(request: Request) -> Optional[dict[str, Any]]:
+    """Try to parse the request body as JSON for POST/PUT requests (async)."""
+    if request.method not in ("POST", "PUT", "PATCH"):
+        return None
+    try:
+        body_bytes = await request.body()
+    except Exception:
+        return None
+    try:
+        body_text = body_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    if not body_text:
+        return None
+    try:
+        data = json.loads(body_text)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
 class AuditMiddleware(BaseHTTPMiddleware):
     """Starlette middleware that logs every HTTP request via AuditLogger.
 
@@ -241,19 +298,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if endpoint in self._SKIP_ENDPOINTS:
             return response
 
-        request_body: Optional[dict[str, Any]] = None
-        if method in ("POST", "PUT") and request.url.path.startswith("/exec"):
-            try:
-                body_bytes = await request.body()
-                body_text = body_bytes.decode("utf-8", errors="replace")
-                if body_text:
-                    body_data = json.loads(body_text)
-                    if isinstance(body_data, dict):
-                        request_body = body_data
-                        if body_data.get("command"):
-                            _ = body_data.get("command")
-            except Exception:
-                pass
+        request_body = await _extract_body_async(request)
+
+        _log_audit_console(method, endpoint, source_ip, status, duration_ms, request_body)
 
         error = None
         response_summary = str(status)
@@ -286,3 +333,19 @@ class AuditMiddleware(BaseHTTPMiddleware):
             command_executed=command_executed,
         )
         return response
+
+
+def _log_audit_console(
+    method: str, endpoint: str, source_ip: str, status: int,
+    duration_ms: float, body: Optional[dict[str, Any]],
+) -> None:
+    """Log a structured audit line to the console (stdout)."""
+    import logging
+    logger = logging.getLogger("hermes-agent")
+    body_str = json.dumps(_sanitize_body(body), default=str) if body else "-"
+    level = logging.WARNING if status >= 400 else logging.INFO
+    logger.log(
+        level,
+        "[AUDIT] %s %s | ip=%s | status=%s | duration=%.0fms | body=%s",
+        method, endpoint, source_ip, status, duration_ms, body_str,
+    )
