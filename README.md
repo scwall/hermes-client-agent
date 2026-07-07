@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-80%20passed-brightgreen)](tests/)
+[![Tests](https://github.com/scwall/hermes-client-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/scwall/hermes-client-agent/actions/workflows/tests.yml)
 [![Lint](https://img.shields.io/badge/ruff-clean-brightgreen)](.)
 
 ### Remote machine control agent for the Hermes AI assistant
@@ -192,7 +192,7 @@ curl "http://agent:8765/api/logs/export?format=csv" -H "X-Agent-Token: YOUR_TOKE
 ## Development
 
 ```bash
-uv run pytest tests/ -v       # 80 tests
+uv run pytest tests/ -v       # 97 tests
 python scripts/build_exe.py   # → dist/hermes-agent.exe (23.5 MiB)
 uv run ruff check .           # lint
 uv run ruff format .          # format
