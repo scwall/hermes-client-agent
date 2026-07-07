@@ -1,6 +1,6 @@
 [project]
 name = "hermes-client-agent"
-version = "1.1.0"
+version = "0.1.0"
 description = "Remote machine control agent for the Hermes AI assistant"
 authors = [{name = "Pascal de Selys"}]
 license = {text = "MIT"}

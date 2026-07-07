@@ -221,7 +221,7 @@ curl "http://agent:8765/api/logs/export?format=csv" -H "X-Agent-Token: YOUR_TOKE
 ## Development
 
 ```bash
-uv run pytest tests/ -v       # 97 tests
+uv run pytest tests/ -v       # 135 tests
 python scripts/build_exe.py   # → dist/hermes-agent.exe (23.5 MiB)
 uv run ruff check .           # lint
 uv run ruff format .          # format
