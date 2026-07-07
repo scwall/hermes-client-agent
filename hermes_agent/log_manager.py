@@ -1,12 +1,11 @@
 """In-memory log capture, request middleware, and a real-time HTML dashboard."""
-import logging
 import collections
+import logging
 from datetime import datetime, timezone
 
+from fastapi import APIRouter
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
 
 MAX_LOG_ENTRIES = 500
 _log_entries: collections.deque = collections.deque(maxlen=MAX_LOG_ENTRIES)

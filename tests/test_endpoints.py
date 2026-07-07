@@ -1,5 +1,4 @@
 """Integration tests for API endpoints using FastAPI TestClient."""
-import pytest
 from fastapi.testclient import TestClient
 
 from hermes_agent.app import app

@@ -1,6 +1,5 @@
 """Unit tests for the AuditLogger and AuditMiddleware."""
 import json
-import os
 import tempfile
 from pathlib import Path
 
@@ -97,8 +96,14 @@ class TestAuditLogger:
         assert result["total"] == 2
 
     def test_get_logs_text_search(self):
-        self.logger.log_request(endpoint="/exec", method="POST", source_ip="1", response_status=200, duration_ms=10, command_executed="hostname")
-        self.logger.log_request(endpoint="/exec", method="POST", source_ip="1", response_status=200, duration_ms=10, command_executed="dir")
+        self.logger.log_request(
+            endpoint="/exec", method="POST", source_ip="1",
+            response_status=200, duration_ms=10, command_executed="hostname",
+        )
+        self.logger.log_request(
+            endpoint="/exec", method="POST", source_ip="1",
+            response_status=200, duration_ms=10, command_executed="dir",
+        )
         result = self.logger.get_logs(search="hostname")
         assert result["total"] == 1
 
@@ -168,8 +173,9 @@ class TestAuditMiddleware:
     """Integration tests for AuditMiddleware via FastAPI TestClient."""
 
     def test_middleware_logs_requests(self):
-        from hermes_agent.app import app
         from fastapi.testclient import TestClient
+
+        from hermes_agent.app import app
 
         with TestClient(app) as client:
             resp = client.get("/health")
@@ -180,8 +186,9 @@ class TestAuditMiddleware:
         assert result["total"] > 0
 
     def test_middleware_logs_401(self):
-        from hermes_agent.app import app
         from fastapi.testclient import TestClient
+
+        from hermes_agent.app import app
 
         with TestClient(app) as client:
             resp = client.post("/exec", headers={"X-Agent-Token": "wrong"}, json={"command": "hostname"})
@@ -221,6 +228,7 @@ class TestAuditHelpers:
     def test_extract_body_async_returns_none_for_get(self):
         import asyncio
         from unittest.mock import MagicMock
+
         from hermes_agent.audit_logger import _extract_body_async
 
         request = MagicMock()
@@ -230,9 +238,10 @@ class TestAuditHelpers:
         assert result is None
 
     def test_get_logs_ip_filter(self):
-        from hermes_agent.audit_logger import AuditLogger
         import tempfile
         from pathlib import Path
+
+        from hermes_agent.audit_logger import AuditLogger
 
         tmpdir = tempfile.mkdtemp()
         log_path = Path(tmpdir) / "ip_filter_test.jsonl"
@@ -255,18 +264,25 @@ class TestAuditHelpers:
         Path(tmpdir).rmdir()
 
     def test_get_stats_top_ips(self):
-        from hermes_agent.audit_logger import AuditLogger
         import tempfile
         from pathlib import Path
+
+        from hermes_agent.audit_logger import AuditLogger
 
         tmpdir = tempfile.mkdtemp()
         log_path = Path(tmpdir) / "top_ips_test.jsonl"
         logger = AuditLogger(log_path=log_path)
 
         for _ in range(5):
-            logger.log_request(endpoint="/a", method="GET", source_ip="192.168.1.1", response_status=200, duration_ms=10)
+            logger.log_request(
+                endpoint="/a", method="GET", source_ip="192.168.1.1",
+                response_status=200, duration_ms=10,
+            )
         for _ in range(3):
-            logger.log_request(endpoint="/a", method="GET", source_ip="10.0.0.1", response_status=200, duration_ms=10)
+            logger.log_request(
+                endpoint="/a", method="GET", source_ip="10.0.0.1",
+                response_status=200, duration_ms=10,
+            )
 
         stats = logger.get_stats()
         assert len(stats["top_ips"]) == 2

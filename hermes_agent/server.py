@@ -30,7 +30,7 @@ def run_server() -> None:
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
 
-    tray_thread = start_tray()
+    start_tray()
 
     try:
         server.run()

@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from hermes_agent.security import verify_token, check_path_allowed
+from hermes_agent.security import check_path_allowed, verify_token
 
 router = APIRouter(tags=["file"], dependencies=[Depends(verify_token)])
 

@@ -1,8 +1,8 @@
 """System information endpoint — OS, CPU, memory, disks, network."""
 import os
-import sys
-import socket
 import platform
+import socket
+import sys
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -44,8 +44,8 @@ def _get_network_interfaces() -> dict[str, list[str]]:
 
     result = {}
     try:
-        import struct
         import fcntl
+        import struct
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         for _index, name in socket.if_nameindex():
             try:

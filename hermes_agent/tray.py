@@ -1,4 +1,6 @@
 """System tray icon for the Hermes Windows Agent using pystray and Pillow."""
+from __future__ import annotations
+
 import os
 import signal
 import subprocess
@@ -7,7 +9,23 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+try:
+    import pystray
+except ImportError:
+    pystray = None  # type: ignore[assignment]
+
+try:
+    from PIL import Image as PILImage
+    from PIL import ImageDraw, ImageFont
+except ImportError:
+    PILImage = None  # type: ignore[assignment]
+    ImageDraw = None  # type: ignore[assignment]
+    ImageFont = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from PIL.Image import Image
 
 from hermes_agent.config import PORT, log
 
@@ -46,7 +64,6 @@ def _get_icon_path() -> Optional[Path]:
 
 def _generate_icon(color: str = "green"):
     """Generate a stylised 'H' on a round coloured background."""
-    from PIL import Image, ImageDraw, ImageFont
     colors = {
         "green": (46, 160, 67),
         "yellow": (210, 153, 34),
@@ -54,7 +71,7 @@ def _generate_icon(color: str = "green"):
     }
     fill = colors.get(color, colors["green"])
     size = 64
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    image = PILImage.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     draw.ellipse([2, 2, size - 2, size - 2], fill=fill)
     try:
@@ -68,7 +85,6 @@ def _generate_icon(color: str = "green"):
 def _build_image(color: str = "green"):
     icon_path = _get_icon_path()
     if icon_path:
-        from PIL import Image as PILImage
         img = PILImage.open(icon_path)
         return img.resize((64, 64))
     return _generate_icon(color)
@@ -106,8 +122,7 @@ def _quit_agent(icon, item) -> None:
     os.kill(os.getpid(), signal.SIGINT)
 
 
-def _create_menu() -> "pystray.Menu":
-    import pystray
+def _create_menu() -> "pystray.Menu":  # noqa: F821
     return pystray.Menu(
         pystray.MenuItem("Dashboard", _open_dashboard, default=True),
         pystray.MenuItem("Status", _show_status),
@@ -117,7 +132,7 @@ def _create_menu() -> "pystray.Menu":
     )
 
 
-def _get_image() -> "Image":
+def _get_image() -> "Image":  # noqa: F821
     color = _tray_state.status
     return _build_image(color)
 
@@ -138,9 +153,7 @@ def start_tray() -> threading.Thread:
     if _is_tray_running:
         return _tray_thread
 
-    try:
-        import pystray
-    except ImportError:
+    if pystray is None:
         log.warning("pystray not installed – tray icon disabled")
         return None
 

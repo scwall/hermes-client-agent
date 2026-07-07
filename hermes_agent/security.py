@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import Header, HTTPException, Request
 
-from hermes_agent.config import TOKEN, DASHBOARD_TOKEN, ALLOWED_PATHS, log
+from hermes_agent.config import ALLOWED_PATHS, DASHBOARD_TOKEN, TOKEN, log
 
 
 def verify_token(x_agent_token: str = Header(...)):

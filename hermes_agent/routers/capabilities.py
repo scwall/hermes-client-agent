@@ -1,7 +1,7 @@
 """Public capabilities and health endpoints."""
 from fastapi import APIRouter
 
-from hermes_agent.modules import get_modules, get_endpoints
+from hermes_agent.modules import get_endpoints, get_modules
 
 router = APIRouter(tags=["capabilities"])
 

@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from hermes_agent.modules import is_module_available, build_module_error
+from hermes_agent.modules import build_module_error
 from hermes_agent.security import verify_token
 
 try:

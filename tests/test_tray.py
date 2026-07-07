@@ -1,11 +1,11 @@
 """Unit tests for the system tray module."""
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hermes_agent.tray import TrayState, _generate_icon, _get_icon_path, _build_image
+from hermes_agent.tray import TrayState, _build_image, _generate_icon, _get_icon_path
 
 
 class TestTrayState:
@@ -38,7 +38,7 @@ class TestIconGeneration:
 
     def test_generate_icon_returns_image(self):
         try:
-            from PIL import Image
+            from PIL import Image as _Image  # noqa: F401
         except ImportError:
             pytest.skip("Pillow not installed")
         img = _generate_icon("green")
@@ -47,7 +47,7 @@ class TestIconGeneration:
 
     def test_generate_icon_colors(self):
         try:
-            from PIL import Image
+            from PIL import Image as _Image  # noqa: F401
         except ImportError:
             pytest.skip("Pillow not installed")
         green_img = _generate_icon("green")
@@ -76,11 +76,10 @@ class TestTrayStartup:
     """Tests for tray startup/shutdown behavior."""
 
     def test_start_tray_without_pystray(self):
-        with patch.dict(sys.modules, {"pystray": None}):
-            with patch("hermes_agent.tray.log") as mock_log:
-                from hermes_agent.tray import start_tray
-                result = start_tray()
-                assert result is None
+        with patch("hermes_agent.tray.pystray", None):
+            from hermes_agent.tray import start_tray
+            result = start_tray()
+            assert result is None
 
     def test_start_tray_already_running(self):
         if "pystray" not in sys.modules:

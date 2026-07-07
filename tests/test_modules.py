@@ -1,13 +1,8 @@
 """Tests for module detection and capabilities."""
-import pytest
 
 from hermes_agent.modules import (
-    detect_module,
-    detect_modules,
-    get_modules,
-    get_endpoints,
-    is_module_available,
     build_module_error,
+    detect_module,
 )
 
 

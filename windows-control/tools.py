@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,7 @@ STATE_FILE = PLUGIN_DIR / "state.json"
 DEFAULT_STATE: dict[str, Any] = {
     "agent_url": "http://192.168.1.100:8765",
     "token": "hermes-windows-agent-secret-token-change-me",
-    "timeout": 30,
+    "timeout": 15,
     "enabled": True,
 }
 
@@ -45,6 +46,7 @@ def _make_request(
     path: str,
     json_data: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
+    timeout: int | None = None,
 ) -> str:
     """Make an HTTP request to the Windows agent.
 
@@ -60,17 +62,21 @@ def _make_request(
             headers=headers,
             json=json_data,
             params=params,
-            timeout=state["timeout"],
+            timeout=timeout or state["timeout"],
         )
         resp.raise_for_status()
         return json.dumps(resp.json())
     except requests.exceptions.ConnectionError:
         return json.dumps({"error": "agent_unreachable", "url": url})
     except requests.exceptions.Timeout:
-        return json.dumps({"error": "agent_timeout", "timeout": state["timeout"]})
+        return json.dumps({"error": "agent_timeout", "timeout": timeout or state["timeout"]})
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else 0
-        return json.dumps({"error": f"http_{status}", "detail": str(exc)})
+        try:
+            body = exc.response.text[:500] if exc.response is not None else "(no body)"
+        except Exception:
+            body = "(no body)"
+        return json.dumps({"error": f"http_{status}", "detail": str(exc), "body": body})
     except Exception as exc:
         return json.dumps({"error": str(exc)})
 
@@ -90,10 +96,14 @@ def _capabilities_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 
 def _exec_handler(args: dict[str, Any], **kwargs: Any) -> str:
-    """POST /exec"""
+    """POST /exec — forces UTF-8 via chcp 65001."""
     command = str(args.get("command", ""))
     shell = str(args.get("shell", "cmd"))
-    timeout = int(args.get("timeout", 30))
+    if shell.lower() == "powershell":
+        command = f"chcp 65001 > nul && {command}"
+    else:
+        command = f"chcp 65001 > nul & {command}"
+    timeout = int(args.get("timeout", 15))
     return _make_request(
         "POST",
         "/exec",
@@ -215,14 +225,14 @@ def _window_list_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 
 def _screenshot_handler(args: dict[str, Any], **kwargs: Any) -> str:
-    """GET /screenshot"""
+    """GET /screenshot — 10s timeout."""
     params: dict[str, Any] = {}
     region = args.get("region")
     if region:
         if isinstance(region, dict):
             region = region.get("region", "")
         params["region"] = str(region)
-    return _make_request("GET", "/screenshot", params=params)
+    return _make_request("GET", "/screenshot", params=params, timeout=10)
 
 
 def _processes_handler(args: dict[str, Any], **kwargs: Any) -> str:
@@ -240,6 +250,36 @@ def _process_kill_handler(args: dict[str, Any], **kwargs: Any) -> str:
 def _system_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """GET /system"""
     return _make_request("GET", "/system")
+
+
+def _open_app_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    """Launch an app via exec then bring its window to front."""
+    executable = str(args.get("executable", ""))
+    arguments = str(args.get("arguments", ""))
+    wait_focus = bool(args.get("wait_focus", True))
+
+    if not executable:
+        return json.dumps({"error": "missing executable"})
+
+    cmd = f"start '' '{executable}'"
+    if arguments:
+        cmd += f" {arguments}"
+
+    exec_result = json.loads(_make_request(
+        "POST", "/exec",
+        json_data={"command": cmd, "shell": "cmd", "timeout": 10},
+    ))
+
+    if wait_focus:
+        time.sleep(1.5)
+        focus_result = json.loads(_make_request(
+            "POST", "/window/focus",
+            json_data={"title_substring": executable.rsplit(".", 1)[0]},
+            timeout=5,
+        ))
+        return json.dumps({"exec": exec_result, "focus": focus_result})
+
+    return json.dumps({"exec": exec_result})
 
 
 # ---------------------------------------------------------------------------

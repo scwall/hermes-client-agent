@@ -1,6 +1,6 @@
 """Structured JSON Lines audit logger and FastAPI middleware for all HTTP requests."""
 import json
-import os
+import logging
 import threading
 import time
 from collections import defaultdict
@@ -340,7 +340,6 @@ def _log_audit_console(
     duration_ms: float, body: Optional[dict[str, Any]],
 ) -> None:
     """Log a structured audit line to the console (stdout)."""
-    import logging
     logger = logging.getLogger("hermes-agent")
     body_str = json.dumps(_sanitize_body(body), default=str) if body else "-"
     level = logging.WARNING if status >= 400 else logging.INFO

@@ -1,6 +1,6 @@
 """Application configuration loaded from environment variables."""
-import os
 import logging
+import os
 from pathlib import Path
 
 try:

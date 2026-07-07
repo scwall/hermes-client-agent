@@ -227,7 +227,7 @@ WINDOWS_SCREENSHOT_SCHEMA = _s(
     {
         "region": {
             "type": "string",
-            "description": "Optional region as 'x,y,w,h' (e.g., '0,0,800,600'). Full screen if omitted.",
+            "description": "Optional region as 'x,y,w,h' (e.g., '0,0,800,600').",
         },
     },
 )
@@ -254,4 +254,26 @@ WINDOWS_SYSTEM_SCHEMA = _s(
     "windows_system",
     "Get system information from the remote PC (hostname, OS, CPU, RAM, disks, etc.).",
     {},
+)
+
+WINDOWS_OPEN_APP_SCHEMA = _s(
+    "windows_open_app",
+    "Launch an application on the remote PC and optionally bring its window to front.",
+    {
+        "executable": {
+            "type": "string",
+            "description": "Application name (e.g., 'notepad.exe', 'calc.exe', 'chrome.exe').",
+        },
+        "arguments": {
+            "type": "string",
+            "description": "Optional command-line arguments.",
+            "default": "",
+        },
+        "wait_focus": {
+            "type": "boolean",
+            "description": "If true, bring the window to front after launch (default: true).",
+            "default": True,
+        },
+    },
+    ["executable"],
 )
