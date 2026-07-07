@@ -14,20 +14,15 @@ class TestLoadConfig:
     """Tests for _load_config_from_ctx() and _load_config()."""
 
     def test_loads_from_hermes_config(self):
-        with patch("windows_control.tools._ctx") as mock_ctx:
-            mock_ctx.config = MagicMock(side_effect=AttributeError)
-            with patch("hermes_cli.config.load_config") as mock_lc:
-                mock_lc.return_value = {"windows_control": {"agents": {"a": {"url": "http://x", "token": "t"}}}}
-                cfg, src = tools._load_config()
-                assert src == "config.yaml"
-                assert "a" in cfg["agents"]
+        with patch.object(tools, "_load_config_from_ctx", return_value={"agents": {"a": {"url": "http://x", "token": "t"}}}):
+            cfg, src = tools._load_config()
+            assert src == "config.yaml"
+            assert "a" in cfg["agents"]
 
     def test_no_config_raises(self):
-        with patch("windows_control.tools._ctx") as mock_ctx:
-            mock_ctx.config = MagicMock(side_effect=AttributeError)
-            with patch("hermes_cli.config.load_config", side_effect=ImportError):
-                with pytest.raises(RuntimeError, match="No agents configured"):
-                    tools._load_config()
+        with patch.object(tools, "_load_config_from_ctx", return_value=None):
+            with pytest.raises(RuntimeError, match="No agents configured"):
+                tools._load_config()
 
 
 class TestGetAgentConfig:
@@ -246,14 +241,14 @@ class TestMakeRequest:
     """Tests for _make_request HTTP behavior."""
 
     def test_connection_error(self):
-        with patch("requests.request", side_effect=__import__("requests").exceptions.ConnectionError):
-            with patch("windows_control.tools._get_agent_config", return_value={"url": "http://x", "token": "t", "timeout": 10}):
+        with patch.object(tools, "_load_config", return_value=({"agents": {"a": {"url": "http://x", "token": "t", "timeout": 10}}}, "config.yaml")):
+            with patch("requests.request", side_effect=__import__("requests").exceptions.ConnectionError):
                 r = json.loads(tools._make_request("GET", "/health"))
                 assert r["error"] == "agent_unreachable"
 
     def test_timeout(self):
-        with patch("requests.request", side_effect=__import__("requests").exceptions.Timeout):
-            with patch("windows_control.tools._get_agent_config", return_value={"url": "http://x", "token": "t", "timeout": 10}):
+        with patch.object(tools, "_load_config", return_value=({"agents": {"a": {"url": "http://x", "token": "t", "timeout": 10}}}, "config.yaml")):
+            with patch("requests.request", side_effect=__import__("requests").exceptions.Timeout):
                 r = json.loads(tools._make_request("GET", "/health", timeout=5))
                 assert r["error"] == "agent_timeout"
 
@@ -262,8 +257,8 @@ class TestMakeRequest:
         resp.status_code = 422
         resp.text = '{"detail":"bad request"}'
         resp.raise_for_status.side_effect = __import__("requests").exceptions.HTTPError(response=resp)
-        with patch("requests.request", return_value=resp):
-            with patch("windows_control.tools._get_agent_config", return_value={"url": "http://x", "token": "t", "timeout": 10}):
+        with patch.object(tools, "_load_config", return_value=({"agents": {"a": {"url": "http://x", "token": "t", "timeout": 10}}}, "config.yaml")):
+            with patch("requests.request", return_value=resp):
                 r = json.loads(tools._make_request("POST", "/keyboard/type", json_data={"text": "x"}))
                 assert r["error"] == "http_422"
                 assert "body" in r
