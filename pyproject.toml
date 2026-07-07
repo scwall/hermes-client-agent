@@ -18,20 +18,6 @@ dependencies = [
     "psutil>=7.2.2",
 ]
 
-[project.optional-dependencies]
-full = [
-    "pyautogui>=0.9.53",
-    "pygetwindow>=0.0.9",
-    "psutil>=5.9.0",
-]
-
-dev = [
-    "pytest>=8.0.0",
-    "httpx>=0.27.0",
-    "ruff>=0.8.0",
-    "pyinstaller>=6.0.0",
-]
-
 [tool.setuptools.packages.find]
 include = ["hermes_agent*"]
 
@@ -47,6 +33,9 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+    "ruff>=0.8.0",
+    "pyinstaller>=6.0.0",
     "requests>=2.34.2",
-    "ruff>=0.15.20",
 ]
