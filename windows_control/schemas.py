@@ -228,11 +228,28 @@ WINDOWS_WINDOW_LIST_SCHEMA = _s(
 
 WINDOWS_SCREENSHOT_SCHEMA = _s(
     "windows_screenshot",
-    "Capture a screenshot of the remote PC's display.",
+    "Capture a screenshot of the remote PC's display. "
+    "Use scale=0.5 for a lighter thumbnail, quality=60 for good compression.",
     {
         "region": {
             "type": "string",
-            "description": "Optional region as 'x,y,w,h' (e.g., '0,0,800,600').",
+            "description": "Optional region as 'x,y,w,h'. Full screen if omitted.",
+        },
+        "scale": {
+            "type": "number",
+            "description": "Resize factor (0.1 to 1.0). 0.5 = half resolution. Default: 1.0.",
+            "default": 1.0,
+        },
+        "quality": {
+            "type": "integer",
+            "description": "JPEG compression quality (1-100). Ignored for PNG. Default: 70.",
+            "default": 70,
+        },
+        "format": {
+            "type": "string",
+            "enum": ["jpeg", "png"],
+            "description": "Output format. 'jpeg' is lighter (~90 KB at 1440p). 'png' is lossless. Default: 'jpeg'.",
+            "default": "jpeg",
         },
     },
 )

@@ -271,12 +271,12 @@ def _window_list_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 
 def _screenshot_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    """GET /screenshot — supports scale/quality/format compression."""
     params: dict[str, Any] = {}
-    region = args.get("region")
-    if region:
-        if isinstance(region, dict):
-            region = region.get("region", "")
-        params["region"] = str(region)
+    for key in ("region", "scale", "quality", "format"):
+        val = args.get(key)
+        if val is not None:
+            params[key] = str(val) if isinstance(val, str) else val
     return _make_request("GET", "/screenshot", params=params, timeout=10, agent=args.get("agent"))
 
 

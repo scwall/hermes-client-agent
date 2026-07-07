@@ -1,4 +1,4 @@
-"""Screenshot capture endpoint — full screen or region as PNG base64."""
+"""Screenshot capture endpoint — full screen or region as base64 with optional compression."""
 import base64
 import ctypes
 import struct
@@ -64,54 +64,72 @@ def _capture_screen_rgba() -> tuple:
     return b"".join(rows), width, height
 
 
-def _rgba_to_png(rgba_data: bytes, width: int, height: int) -> bytes:
-    """Convert raw RGBA bytes to PNG using PIL, or fall back to BMP header."""
-    if Image is not None:
-        img = Image.frombuffer("RGBA", (width, height), rgba_data, "raw", "RGBA", 0, 1)
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
-    header = struct.pack("<2sIHHI", b"BM", 54 + len(rgba_data), 0, 0, 54)
-    return header + rgba_data
+def _rgba_to_image(rgba_data: bytes, width: int, height: int) -> "Image.Image":
+    """Convert raw RGBA bytes to a PIL Image."""
+    if Image is None:
+        raise RuntimeError("Pillow (PIL) is not installed")
+    return Image.frombuffer("RGBA", (width, height), rgba_data, "raw", "RGBA", 0, 1)
 
 
-def _take_full_screenshot() -> tuple[bytes, int, int]:
-    """Capture the full screen and return (png_bytes, width, height)."""
-    rgba_data, width, height = _capture_screen_rgba()
-    png_data = _rgba_to_png(rgba_data, width, height)
-    return png_data, width, height
+def _encode_image(img: "Image.Image", output_format: str, quality: int) -> bytes:
+    """Encode a PIL Image to PNG or JPEG bytes."""
+    buf = BytesIO()
+    if output_format == "jpeg":
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+    else:
+        img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
 
-def _take_region_screenshot(x: int, y: int, w: int, h: int) -> tuple[bytes, int, int]:
-    """Capture a screen region and return (png_bytes, width, height)."""
-    rgba_data, sw, sh = _capture_screen_rgba()
-    if Image is not None:
-        img = Image.frombuffer("RGBA", (sw, sh), rgba_data, "raw", "RGBA", 0, 1)
-        cropped = img.crop((x, y, x + w, y + h))
-        buf = BytesIO()
-        cropped.save(buf, format="PNG")
-        return buf.getvalue(), w, h
-    return _take_full_screenshot()
-
-
-@router.get("/screenshot", summary="Capture the screen as PNG base64")
-async def screenshot(region: Optional[str] = Query(None, description="Optional region as x,y,w,h")):
+@router.get("/screenshot", summary="Capture the screen as base64 with optional compression")
+async def screenshot(
+    region: Optional[str] = Query(None, description="Optional region as x,y,w,h"),
+    scale: float = Query(1.0, ge=0.1, le=1.0, description="Resize factor (0.1 to 1.0)"),
+    quality: int = Query(70, ge=1, le=100, description="JPEG compression quality (1-100, ignored for PNG)"),
+    fmt: str = Query("png", alias="format", description="Output format: 'jpeg' or 'png'"),
+):
     """Take a screenshot of the full primary monitor, or a specific region.
 
-    Returns a JSON object with the base64-encoded PNG image and its dimensions.
+    Supports optional compression via scale, quality, and format parameters.
+    Returns a JSON object with the base64-encoded image and its dimensions.
+
+    - ``scale`` : resize factor (0.1 to 1.0). Default 1.0 = full resolution.
+    - ``quality`` : JPEG quality (1-100). Default 70. Ignored for PNG.
+    - ``format`` : output format, ``jpeg`` or ``png``. Default ``png``.
     """
+    if fmt not in ("jpeg", "png"):
+        raise HTTPException(status_code=422, detail="format must be 'jpeg' or 'png'")
+
     try:
         if region:
             parts = [int(p.strip()) for p in region.split(",")]
             if len(parts) != 4:
                 raise HTTPException(status_code=400, detail="Region must be x,y,w,h")
-            img_bytes, scr_w, scr_h = _take_region_screenshot(*parts)
+            rgba_data, sw, sh = _capture_screen_rgba()
+            img = _rgba_to_image(rgba_data, sw, sh)
+            img = img.crop((parts[0], parts[1], parts[0] + parts[2], parts[1] + parts[3]))
         else:
-            img_bytes, scr_w, scr_h = _take_full_screenshot()
+            rgba_data, sw, sh = _capture_screen_rgba()
+            img = _rgba_to_image(rgba_data, sw, sh)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    if scale < 1.0:
+        new_w = max(1, int(img.width * scale))
+        new_h = max(1, int(img.height * scale))
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+
+    img_bytes = _encode_image(img, fmt, quality)
+
     b64 = base64.b64encode(img_bytes).decode("ascii")
-    return {"image_base64": b64, "format": "png", "width": scr_w, "height": scr_h}
+    return {
+        "image_base64": b64,
+        "format": fmt,
+        "width": img.width,
+        "height": img.height,
+        "original_size": len(img_bytes),
+    }

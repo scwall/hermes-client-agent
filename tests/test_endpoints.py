@@ -112,6 +112,39 @@ class TestFileEndpoints:
         client.post("/file/delete", json={"path": test_path}, headers=AUTH)
 
 
+class TestScreenshotEndpoint:
+    """Tests for GET /screenshot with compression params."""
+
+    def test_screenshot_default_png(self):
+        """GET /screenshot without params returns PNG full size."""
+        resp = client.get("/screenshot", headers=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["format"] == "png"
+        assert "image_base64" in data
+        assert data["width"] > 0
+        assert data["height"] > 0
+
+    def test_screenshot_jpeg_scaled(self):
+        """GET /screenshot with scale=0.5 and format=jpeg returns compressed JPEG."""
+        resp = client.get("/screenshot", params={"scale": 0.5, "format": "jpeg", "quality": 50}, headers=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["format"] == "jpeg"
+        assert data["width"] > 0
+        assert data["original_size"] > 0
+
+    def test_screenshot_invalid_format_422(self):
+        """GET /screenshot with invalid format returns 422."""
+        resp = client.get("/screenshot", params={"format": "gif"}, headers=AUTH)
+        assert resp.status_code == 422
+
+    def test_screenshot_scale_clamped(self):
+        """GET /screenshot with scale=0.05 is clamped to 0.1 by FastAPI."""
+        resp = client.get("/screenshot", params={"scale": 0.05}, headers=AUTH)
+        assert resp.status_code == 422  # FastAPI rejects values < ge=0.1
+
+
 class TestSystemEndpoint:
     """Tests for GET /system."""
 
