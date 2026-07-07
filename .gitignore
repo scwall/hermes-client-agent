@@ -28,3 +28,4 @@ __pycache__/
 # Binaries
 *.exe
 *.bak
+windows_control/state.json
