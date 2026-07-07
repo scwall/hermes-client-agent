@@ -3,7 +3,6 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://github.com/scwall/hermes-client-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/scwall/hermes-client-agent/actions/workflows/tests.yml)
-[![Lint](https://img.shields.io/badge/ruff-clean-brightgreen)](.)
 
 ### Remote machine control agent for the Hermes AI assistant
 
@@ -124,11 +123,60 @@ The `windows_control/` directory contains a native Hermes plugin that registers 
 
 ```bash
 cp -r windows_control/ ~/.hermes/plugins/windows_control/
-# Edit state.json with your agent's IP and token
-# Restart Hermes
 ```
 
-The plugin auto-discovers agents listed in its configuration and exposes their endpoints as native Hermes tools (toolset `windows`).
+### Multi-agent config (recommended)
+
+Configure agents in Hermes' `config.yaml`:
+
+```yaml
+windows_control:
+  agents:
+    laptop:
+      url: "http://192.168.1.4:8765"
+      token: "${LAPTOP_TOKEN}"
+      timeout: 30
+    framework:
+      url: "http://192.168.1.10:8765"
+      token: "${FRAMEWORK_TOKEN}"
+      timeout: 15
+  default_agent: "laptop"
+```
+
+Set tokens in Hermes' `.env`:
+
+```bash
+LAPTOP_TOKEN=hermes-windows-agent-secret-change-me
+FRAMEWORK_TOKEN=token-pour-framework
+```
+
+### Single-agent fallback (state.json)
+
+If `config.yaml` is not available, the plugin falls back to `state.json`:
+
+```json
+{
+    "agents": {
+        "laptop": {
+            "url": "http://192.168.1.4:8765",
+            "token": "hermes-windows-agent-secret-change-me",
+            "timeout": 30
+        }
+    },
+    "default_agent": "laptop"
+}
+```
+
+Old flat `state.json` format (`agent_url`, `token`) is auto-converted.
+
+### Usage
+
+```text
+windows_exec {command: "hostname"}              → targets default_agent
+windows_exec {command: "hostname", agent: "fw"} → targets framework
+```
+
+Restart Hermes after configuration. The plugin logs loaded agents on startup.
 
 ---
 
