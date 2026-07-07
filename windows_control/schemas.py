@@ -4,13 +4,18 @@ from typing import Any
 
 def _s(name: str, desc: str, properties: dict[str, Any],
        required: list[str] | None = None) -> dict[str, Any]:
-    """Build a Hermes-compliant tool schema."""
+    """Build a Hermes-compliant tool schema (with optional agent parameter)."""
+    props = dict(properties)
+    props["agent"] = {
+        "type": "string",
+        "description": "Target agent name (uses default if omitted).",
+    }
     schema: dict[str, Any] = {
         "name": name,
         "description": desc,
         "parameters": {
             "type": "object",
-            "properties": properties,
+            "properties": props,
         },
     }
     if required:

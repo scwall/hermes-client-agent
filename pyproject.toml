@@ -47,5 +47,6 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "requests>=2.34.2",
     "ruff>=0.15.20",
 ]
