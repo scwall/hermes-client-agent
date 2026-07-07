@@ -53,10 +53,10 @@ def _save_state(state: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def _make_request(
-        method: str,
-        path: str,
-        json_data: dict[str, Any] | None = None,
-        params: dict[str, Any] | None = None,
+    method: str,
+    path: str,
+    json_data: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
 ) -> str:
     """Make an HTTP request to the Windows agent.
 
