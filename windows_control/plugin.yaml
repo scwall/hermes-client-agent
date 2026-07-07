@@ -1,5 +1,5 @@
 name: windows_control
-version: 1.1.0
-description: Remote Windows PC control via HTTP REST API. 22 tools: exec, files, mouse, keyboard, windows, screenshot, open_app, processes, system.
+version: "1.1.0"
+description: "Remote Windows PC control via HTTP REST API. 22 tools: exec, files, mouse, keyboard, windows, screenshot, open_app, processes, system."
 provides_hooks:
   - on_session_start
