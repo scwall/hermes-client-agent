@@ -88,6 +88,7 @@ class AuditLogger:
         offset: int = 0,
         endpoint_filter: Optional[str] = None,
         status_filter: Optional[str] = None,
+        ip_filter: Optional[str] = None,
         search: Optional[str] = None,
     ) -> dict[str, Any]:
         """Return paginated, filtered log entries."""
@@ -107,6 +108,8 @@ class AuditLogger:
                         continue
                     if status_filter.lower() == "error" and (e.get("response_status") or 0) < 400:
                         continue
+            if ip_filter and ip_filter.lower() not in (e.get("source_ip") or "").lower():
+                continue
             if search:
                 haystack = json.dumps(e, default=str).lower()
                 if search.lower() not in haystack:
@@ -122,12 +125,13 @@ class AuditLogger:
         entries = self._read_all()
         if not entries:
             return {
-                "total": 0,
-                "success": 0,
-                "errors": 0,
-                "avg_duration_ms": 0,
-                "top_endpoints": [],
-                "slowest_commands": [],
+            "total": 0,
+            "success": 0,
+            "errors": 0,
+            "avg_duration_ms": 0,
+            "top_endpoints": [],
+            "top_ips": [],
+            "slowest_commands": [],
             }
 
         success = sum(1 for e in entries if (e.get("response_status") or 0) < 400)
@@ -136,10 +140,15 @@ class AuditLogger:
         avg = round(sum(durations) / len(durations), 2) if durations else 0
 
         endpoint_counts: dict[str, int] = defaultdict(int)
+        ip_counts: dict[str, int] = defaultdict(int)
         for e in entries:
             ep = e.get("endpoint", "?")
             endpoint_counts[ep] += 1
+            ip = e.get("source_ip", "?")
+            if ip and ip != "?":
+                ip_counts[ip] += 1
         top_endpoints = sorted(endpoint_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        top_ips = sorted(ip_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
         slowest = sorted(entries, key=lambda e: e.get("duration_ms", 0), reverse=True)[:5]
         slowest_commands = [
@@ -158,6 +167,7 @@ class AuditLogger:
             "errors": errors,
             "avg_duration_ms": avg,
             "top_endpoints": [{"endpoint": ep, "count": c} for ep, c in top_endpoints],
+            "top_ips": [{"ip": ip, "count": c} for ip, c in top_ips],
             "slowest_commands": slowest_commands,
         }
 

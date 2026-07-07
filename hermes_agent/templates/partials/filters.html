@@ -10,6 +10,7 @@
     <option value="success"{% if 'success' == status_filter %} selected{% endif %}>Success</option>
     <option value="error"{% if 'error' == status_filter %} selected{% endif %}>Errors</option>
   </select>
+  <input type="text" id="filter-ip" placeholder="Source IP..." value="{{ ip_filter }}" oninput="Dashboard.applyFilters()">
   <input type="text" id="filter-search" placeholder="Search..." value="{{ search_query }}" oninput="Dashboard.applyFilters()">
   <button onclick="Dashboard.exportLogs('csv')" class="primary" title="Download CSV">Export CSV</button>
   <button onclick="Dashboard.exportLogs('json')" class="primary" title="Download JSON">Export JSON</button>

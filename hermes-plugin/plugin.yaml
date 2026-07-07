@@ -1,15 +1,5 @@
-# Hermes Windows Control Plugin
-# Gives Hermes Agent full control over a remote Windows/Linux machine
-# via the Hermes Client Agent HTTP API.
-
 name: windows-control
-version: 1.1.0
-description: Remote Windows/Linux desktop control — shell, files, mouse, keyboard, windows, screenshot, processes
-author: Pascal de Selys & Hermes
-license: MIT
-tags: [windows, remote, automation, desktop, rpa]
-
-# Hooks
-hooks:
-  on_session_start:
-    description: Health-check all configured remote agents at session start
+version: 1.0.0
+description: Remote Windows PC control via HTTP REST API. Execute commands, control mouse/keyboard, manage windows, capture screenshots.
+provides_hooks:
+  - on_session_start

@@ -5,6 +5,7 @@ const Dashboard = (function() {
     total: 0,
     endpointFilter: '',
     statusFilter: '',
+    ipFilter: '',
     searchQuery: '',
     sortField: '',
     sortDir: 'asc',
@@ -20,10 +21,12 @@ const Dashboard = (function() {
     state.limit = parseInt(params.get('count')) || 50;
     state.endpointFilter = params.get('endpoint') || defaults.endpoint || '';
     state.statusFilter = params.get('status') || defaults.status || '';
+    state.ipFilter = params.get('ip') || defaults.ip || '';
     state.searchQuery = params.get('search') || '';
 
     if (state.endpointFilter) document.getElementById('filter-endpoint').value = state.endpointFilter;
     if (state.statusFilter) document.getElementById('filter-status').value = state.statusFilter;
+    if (state.ipFilter) document.getElementById('filter-ip').value = state.ipFilter;
     if (state.searchQuery) document.getElementById('filter-search').value = state.searchQuery;
 
     fetchStats();
@@ -58,6 +61,7 @@ const Dashboard = (function() {
     var p = 'count=' + state.limit + '&offset=' + state.offset;
     if (state.endpointFilter) p += '&endpoint=' + encodeURIComponent(state.endpointFilter);
     if (state.statusFilter) p += '&status=' + encodeURIComponent(state.statusFilter);
+    if (state.ipFilter) p += '&ip=' + encodeURIComponent(state.ipFilter);
     if (state.searchQuery) p += '&search=' + encodeURIComponent(state.searchQuery);
     return p;
   }
@@ -65,6 +69,7 @@ const Dashboard = (function() {
   function applyFilters(silent) {
     state.endpointFilter = document.getElementById('filter-endpoint').value;
     state.statusFilter = document.getElementById('filter-status').value;
+    state.ipFilter = document.getElementById('filter-ip').value;
     state.searchQuery = document.getElementById('filter-search').value;
     state.offset = 0;
     if (silent) { fetchLogs(); return; }
@@ -74,9 +79,11 @@ const Dashboard = (function() {
   function resetFilters() {
     document.getElementById('filter-endpoint').value = '';
     document.getElementById('filter-status').value = '';
+    document.getElementById('filter-ip').value = '';
     document.getElementById('filter-search').value = '';
     state.endpointFilter = '';
     state.statusFilter = '';
+    state.ipFilter = '';
     state.searchQuery = '';
     state.offset = 0;
     window.location.search = '';
@@ -132,11 +139,12 @@ const Dashboard = (function() {
       html += '<td>' + ts + '</td>';
       html += '<td>' + (e.method || '?') + '</td>';
       html += '<td>' + (e.endpoint || '?') + '</td>';
+      html += '<td>' + (e.source_ip || '?') + '</td>';
       html += '<td class="' + cls + '">' + (e.response_status || '?') + '</td>';
       html += '<td>' + (e.duration_ms || '?') + '</td>';
       html += '<td>' + (e.command_executed || '') + '</td>';
       html += '</tr>';
-      html += '<tr class="detail-row" id="detail-' + e.id + '"><td colspan="6" class="detail-cell"><pre></pre></td></tr>';
+      html += '<tr class="detail-row" id="detail-' + e.id + '"><td colspan="7" class="detail-cell"><pre></pre></td></tr>';
     }
     document.getElementById('log-body').innerHTML = html;
     populateEndpointFilter();

@@ -5,6 +5,7 @@
       <th onclick="Dashboard.sortBy('timestamp')" id="th-timestamp" class="sorted desc">Timestamp</th>
       <th onclick="Dashboard.sortBy('method')" id="th-method">Method</th>
       <th onclick="Dashboard.sortBy('endpoint')" id="th-endpoint">Endpoint</th>
+      <th onclick="Dashboard.sortBy('source_ip')" id="th-source-ip">Source IP</th>
       <th onclick="Dashboard.sortBy('response_status')" id="th-response-status">Status</th>
       <th onclick="Dashboard.sortBy('duration_ms')" id="th-duration-ms">Duration</th>
       <th>Command</th>
@@ -16,11 +17,12 @@
       <td>{{ e.timestamp[:19].replace('T', ' ') if e.timestamp else '?' }}</td>
       <td>{{ e.method or '?' }}</td>
       <td>{{ e.endpoint or '?' }}</td>
+      <td>{{ e.source_ip or '?' }}</td>
       <td class="{% if e.response_status is defined and (e.response_status|int) < 400 %}status-ok{% else %}status-err{% endif %}">{{ e.response_status or '?' }}</td>
       <td>{{ e.duration_ms or '?' }}</td>
       <td>{{ e.command_executed or '' }}</td>
     </tr>
-    <tr class="detail-row" id="detail-{{ e.id }}"><td colspan="6" class="detail-cell"><pre></pre></td></tr>
+    <tr class="detail-row" id="detail-{{ e.id }}"><td colspan="7" class="detail-cell"><pre></pre></td></tr>
     {% endfor %}
   </tbody>
 </table>

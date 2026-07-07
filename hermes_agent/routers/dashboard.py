@@ -56,6 +56,7 @@ async def api_logs(
     offset: int = Query(0, description="Pagination offset"),
     status: Optional[str] = Query(None, description="Filter by status code or 'success'/'error'"),
     endpoint: Optional[str] = Query(None, description="Filter by endpoint path"),
+    ip: Optional[str] = Query(None, description="Filter by source IP"),
     search: Optional[str] = Query(None, description="Full-text search across all fields"),
 ):
     """Return paginated and filtered audit log entries."""
@@ -64,6 +65,7 @@ async def api_logs(
         offset=offset,
         endpoint_filter=endpoint,
         status_filter=status,
+        ip_filter=ip,
         search=search,
     )
 

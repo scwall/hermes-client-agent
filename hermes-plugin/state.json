@@ -1,0 +1,6 @@
+{
+  "agent_url": "http://192.168.1.4:8765",
+  "agent_token": "hermes-windows-agent-secret-change-me",
+  "timeout": 30,
+  "enabled": true
+}
