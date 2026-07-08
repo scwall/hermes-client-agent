@@ -52,6 +52,45 @@ class TestExecEndpoint:
         resp = client.post("/exec", json={}, headers=AUTH)
         assert resp.status_code == 422
 
+    def test_exec_batch_multiple_commands(self):
+        """POST /exec/batch with 2 commands returns both results."""
+        resp = client.post(
+            "/exec/batch",
+            json={
+                "commands": [
+                    {"command": "echo hello", "shell": "cmd", "timeout": 5},
+                    {"command": "echo world", "shell": "cmd", "timeout": 5},
+                ]
+            },
+            headers=AUTH,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["results"]) == 2
+        assert data["results"][0]["index"] == 0
+        assert data["results"][1]["index"] == 1
+        assert data["success_count"] == 2
+        assert data["error_count"] == 0
+        assert "total_duration_ms" in data
+
+    def test_exec_batch_stop_on_error(self):
+        """POST /exec/batch with stop_on_error=true stops on first failure."""
+        resp = client.post(
+            "/exec/batch",
+            json={
+                "commands": [
+                    {"command": "nonexistent_command_xyz", "shell": "cmd", "timeout": 5},
+                    {"command": "echo never_runs", "shell": "cmd", "timeout": 5},
+                ],
+                "stop_on_error": True,
+            },
+            headers=AUTH,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["results"]) == 1
+        assert data["results"][0]["exit_code"] != 0
+
     def test_exec_unauthorized(self):
         """Missing token should return 401."""
         resp = client.post("/exec", json={"command": "echo"}, headers={"X-Agent-Token": "wrong"})

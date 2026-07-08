@@ -139,6 +139,18 @@ def _exec_handler(args: dict[str, Any], **kwargs: Any) -> str:
     )
 
 
+def _exec_batch_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    """POST /exec/batch — multiple commands sequentially."""
+    return _make_request(
+        "POST", "/exec/batch",
+        json_data={
+            "commands": args["commands"],
+            "stop_on_error": bool(args.get("stop_on_error", False)),
+        },
+        agent=args.get("agent"),
+    )
+
+
 def _file_read_handler(args: dict[str, Any], **kwargs: Any) -> str:
     path = args.get("path", "")
     if isinstance(path, dict):

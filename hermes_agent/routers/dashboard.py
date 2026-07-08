@@ -1,5 +1,4 @@
 """Dashboard API endpoints, HTML pages via Jinja2 templates, and log export."""
-import csv
 import io
 from datetime import datetime, timezone
 from typing import Optional
@@ -85,43 +84,17 @@ async def api_logs_export(
     search: Optional[str] = Query(None),
 ):
     """Download filtered audit logs as a CSV or JSON file."""
-    data = _audit.get_logs(
-        limit=count,
-        offset=0,
-        endpoint_filter=endpoint,
-        status_filter=status,
-        search=search,
-    )
-    entries = data.get("entries", [])
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-
-    if format == "json":
-        import json
-        content = json.dumps(entries, indent=2, default=str)
-        return StreamingResponse(
-            io.BytesIO(content.encode("utf-8")),
-            media_type="application/json",
-            headers={"Content-Disposition": f"attachment; filename=hermes-logs-{ts}.json"},
-        )
-    else:
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["timestamp", "method", "endpoint", "response_status", "duration_ms", "command_executed"])
-        for e in entries:
-            writer.writerow([
-                e.get("timestamp", ""),
-                e.get("method", ""),
-                e.get("endpoint", ""),
-                e.get("response_status", ""),
-                e.get("duration_ms", ""),
-                e.get("command_executed", ""),
-            ])
-        content = output.getvalue()
-        return StreamingResponse(
-            io.BytesIO(content.encode("utf-8-sig")),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=hermes-logs-{ts}.csv"},
-        )
+    content = _audit.export_logs(
+        fmt=format, limit=count, endpoint_filter=endpoint, status_filter=status, search=search,
+    )
+    mime = "application/json" if format == "json" else "text/csv"
+    encoding = "utf-8" if format == "json" else "utf-8-sig"
+    return StreamingResponse(
+        io.BytesIO(content.encode(encoding)),
+        media_type=mime,
+        headers={"Content-Disposition": f"attachment; filename=hermes-logs-{ts}.{format}"},
+    )
 
 
 @router.post("/api/clear-logs", summary="Manually trigger log rotation")

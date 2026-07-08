@@ -10,6 +10,7 @@ from typing import Any
 
 from .schemas import (
     WINDOWS_CAPABILITIES_SCHEMA,
+    WINDOWS_EXEC_BATCH_SCHEMA,
     WINDOWS_EXEC_SCHEMA,
     WINDOWS_FILE_DELETE_SCHEMA,
     WINDOWS_FILE_READ_SCHEMA,
@@ -34,6 +35,7 @@ from .schemas import (
 )
 from .tools import (
     _capabilities_handler,
+    _exec_batch_handler,
     _exec_handler,
     _file_delete_handler,
     _file_read_handler,
@@ -78,6 +80,7 @@ def register(ctx: Any) -> None:
         ("windows_health", "windows", WINDOWS_HEALTH_SCHEMA, _health_handler),
         ("windows_capabilities", "windows", WINDOWS_CAPABILITIES_SCHEMA, _capabilities_handler),
         ("windows_exec", "windows", WINDOWS_EXEC_SCHEMA, _exec_handler),
+        ("windows_exec_batch", "windows", WINDOWS_EXEC_BATCH_SCHEMA, _exec_batch_handler),
         ("windows_file_read", "windows", WINDOWS_FILE_READ_SCHEMA, _file_read_handler),
         ("windows_file_write", "windows", WINDOWS_FILE_WRITE_SCHEMA, _file_write_handler),
         ("windows_file_delete", "windows", WINDOWS_FILE_DELETE_SCHEMA, _file_delete_handler),

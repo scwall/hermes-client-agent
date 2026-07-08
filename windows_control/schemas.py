@@ -35,6 +35,33 @@ WINDOWS_CAPABILITIES_SCHEMA = _s(
     {},
 )
 
+WINDOWS_EXEC_BATCH_SCHEMA = _s(
+    "windows_exec_batch",
+    "Execute multiple commands sequentially on the remote PC. "
+    "Use this instead of multiple windows_exec calls to save tokens.",
+    {
+        "commands": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string"},
+                    "shell": {"type": "string", "default": "cmd"},
+                    "timeout": {"type": "integer", "default": 30},
+                },
+                "required": ["command"],
+            },
+            "description": "List of commands to execute (max 20).",
+        },
+        "stop_on_error": {
+            "type": "boolean",
+            "description": "If true, stop batch on first error.",
+            "default": False,
+        },
+    },
+    ["commands"],
+)
+
 WINDOWS_EXEC_SCHEMA = _s(
     "windows_exec",
     "Execute a command on the remote Windows PC via cmd or powershell.",
