@@ -1,8 +1,11 @@
 """Tests for authentication and rate limiting."""
+import os
+
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from hermes_agent.config import PORT, TOKEN
 from hermes_agent.rate_limiter import RateLimiter, RateLimitMiddleware
 from hermes_agent.security import check_path_allowed, verify_token
 
@@ -12,13 +15,11 @@ class TestVerifyToken:
 
     def test_valid_token(self):
         """verify_token should pass when the correct token is provided."""
-        from hermes_agent.config import TOKEN
         result = verify_token(x_agent_token=TOKEN)
         assert result is True
 
     def test_invalid_token_raises_401(self):
         """verify_token should raise 401 when a wrong token is provided."""
-        from fastapi import HTTPException
         with pytest.raises(HTTPException) as exc_info:
             verify_token(x_agent_token="wrong-token")
         assert exc_info.value.status_code == 401
@@ -60,8 +61,6 @@ class TestCheckPathAllowed:
 
     def test_path_within_allowed(self):
         """A path under an allowed directory should not raise."""
-        import os
-
         allowed = os.path.join(os.path.expanduser("~"), "test.txt")
         try:
             check_path_allowed(allowed, None)
@@ -70,8 +69,6 @@ class TestCheckPathAllowed:
 
     def test_path_outside_allowed_raises_403(self):
         """A path outside allowed directories should raise 403."""
-
-        from fastapi import HTTPException
         try:
             check_path_allowed("/etc/passwd", None)
         except HTTPException as exc:

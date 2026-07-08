@@ -1,4 +1,6 @@
 """AuditLog Peewee model with class methods for all DB operations."""
+import csv
+import io
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -199,8 +201,6 @@ class AuditLog(Model):
                                 status_filter=status_filter, ip_filter=ip_filter, search=search)
         entries = result["entries"]
         if fmt == "csv":
-            import csv
-            import io
             buf = io.StringIO()
             if entries:
                 fields = ["timestamp", "method", "endpoint", "source_ip", "response_status", "duration_ms", "command_executed"]

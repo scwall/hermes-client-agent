@@ -1,4 +1,6 @@
 """Integration tests for API endpoints using FastAPI TestClient."""
+import os
+
 from fastapi.testclient import TestClient
 
 from hermes_agent.app import app
@@ -102,7 +104,6 @@ class TestFileEndpoints:
 
     def test_file_write_read_delete(self):
         """Write, read, and delete a file within the home directory."""
-        import os
         test_path = os.path.join(os.path.expanduser("~"), "hermes-test-pytest.txt")
         write_resp = client.put(
             "/file",
@@ -140,7 +141,6 @@ class TestFileEndpoints:
 
     def test_file_read_alias(self):
         """GET /file/read should return same content as GET /file."""
-        import os
         test_path = os.path.join(os.path.expanduser("~"), "hermes-test-alias.txt")
         client.put("/file", json={"path": test_path, "content": "alias-test"}, headers=AUTH)
         resp1 = client.get("/file", params={"path": test_path}, headers=AUTH)

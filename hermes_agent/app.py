@@ -33,10 +33,8 @@ async def lifespan(app: FastAPI):
     setup_log_capture(logging.getLogger())
     log.info("Hermes Agent starting on port %s", PORT)
     log.info("Token: %s...%s", TOKEN[:6], TOKEN[-4:] if len(TOKEN) > 10 else "****")
-    from hermes_agent.audit import get_audit_logger
-    get_audit_logger()  # initialize DB singleton
+    get_audit_logger()
     yield
-    from hermes_agent.audit import get_audit_logger
     get_audit_logger().close()
     log.info("Hermes Agent shutting down")
 
