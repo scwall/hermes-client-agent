@@ -202,10 +202,10 @@ class AuditLog(Model):
         entries = result["entries"]
         if fmt == "csv":
             buf = io.StringIO()
+            fields = ["timestamp", "method", "endpoint", "source_ip", "response_status", "duration_ms", "command_executed"]
+            writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+            writer.writeheader()
             if entries:
-                fields = ["timestamp", "method", "endpoint", "source_ip", "response_status", "duration_ms", "command_executed"]
-                writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
-                writer.writeheader()
                 writer.writerows(entries)
             return buf.getvalue()
         return json.dumps(entries, indent=2, default=str)

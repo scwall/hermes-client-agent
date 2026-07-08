@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 from hermes_agent.audit.models import AuditLog
-from hermes_agent.audit.utils import log_audit_console
 
 LOG_DIR = Path("logs")
 

@@ -1,5 +1,4 @@
 """ASGI middleware that captures the request body before FastAPI consumes it."""
-import json
 import time
 
 from hermes_agent.audit.logger import get_audit_logger
@@ -56,13 +55,17 @@ class AuditMiddleware:
         error = None
         response_summary = str(status_code)
         if status_code == 401:
-            error = "unauthorized"; response_summary = "Unauthorized"
+            error = "unauthorized"
+            response_summary = "Unauthorized"
         elif status_code == 403:
-            error = "forbidden"; response_summary = "Forbidden"
+            error = "forbidden"
+            response_summary = "Forbidden"
         elif status_code == 429:
-            error = "rate_limited"; response_summary = "Too Many Requests"
+            error = "rate_limited"
+            response_summary = "Too Many Requests"
         elif status_code >= 500:
-            error = "server_error"; response_summary = "Internal Server Error"
+            error = "server_error"
+            response_summary = "Internal Server Error"
         command_executed = None
         if request_body and isinstance(request_body, dict):
             command_executed = request_body.get("command")

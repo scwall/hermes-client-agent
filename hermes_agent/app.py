@@ -8,8 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from hermes_agent.audit import AuditMiddleware
-from hermes_agent.audit import get_audit_logger
+from hermes_agent.audit import AuditMiddleware, get_audit_logger
 from hermes_agent.config import PORT, TOKEN, log
 from hermes_agent.log_manager import RequestLoggingMiddleware, log_router, setup_log_capture
 from hermes_agent.modules import detect_modules
