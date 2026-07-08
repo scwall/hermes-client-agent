@@ -2,10 +2,17 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import time
 from typing import Any
 
 import requests
+
+_log = logging.getLogger("windows_control")
+_plugin_debug = os.environ.get("HERMES_PLUGIN_DEBUG", "false").lower() in ("true", "1", "yes")
+if _plugin_debug:
+    _log.setLevel(logging.DEBUG)
 
 _ctx = None
 
@@ -86,6 +93,11 @@ def _make_request(
     cfg = _get_agent_config(config, agent)
     url = f"{cfg['url'].rstrip('/')}{path}"
     headers = {"X-Agent-Token": cfg["token"]}
+    if _plugin_debug:
+        _log.debug("-> %s %s %s json=%s url=%s timeout=%ss",
+                   agent or "default", method, path,
+                   json.dumps(json_data, default=str)[:200] if json_data else "-",
+                   url, timeout or cfg.get("timeout", 15))
     try:
         resp = requests.request(
             method=method,

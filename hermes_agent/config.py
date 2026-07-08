@@ -25,9 +25,15 @@ PORT = int(os.environ.get("HERMES_AGENT_PORT", "8765"))
 RATE_LIMIT = 60
 RATE_WINDOW = 60
 
+DEBUG = os.environ.get("HERMES_AGENT_DEBUG", "false").lower() in ("true", "1", "yes")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 log = logging.getLogger("hermes-agent")
+if DEBUG:
+    log.setLevel(logging.DEBUG)
+else:
+    log.setLevel(logging.INFO)

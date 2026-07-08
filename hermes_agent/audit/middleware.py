@@ -1,8 +1,11 @@
 """ASGI middleware that captures the request body before FastAPI consumes it."""
+import logging
 import time
 
 from hermes_agent.audit.logger import get_audit_logger
 from hermes_agent.audit.utils import log_audit_console, parse_body
+
+_log = logging.getLogger("hermes-agent")
 
 
 class AuditMiddleware:
@@ -49,7 +52,9 @@ class AuditMiddleware:
 
         await self.app(scope, _receive, _send)
         duration_ms = (time.perf_counter() - start_ts) * 1000
+
         body_text = body_bytes.decode("utf-8", errors="replace") if body_bytes else ""
+        _log.debug("-> REQUEST %s %s ip=%s body_bytes=%d", method, path, source_ip, len(body_bytes))
         request_body = parse_body(body_text)
         log_audit_console(method, path, source_ip, status_code, duration_ms, request_body)
         error = None
@@ -74,3 +79,4 @@ class AuditMiddleware:
             duration_ms=duration_ms, request_body=request_body, response_summary=response_summary,
             error=error, command_executed=command_executed,
         )
+        _log.debug("<- RESPONSE %s %s status=%s duration=%.0fms", method, path, status_code, duration_ms)

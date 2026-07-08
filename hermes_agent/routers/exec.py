@@ -1,4 +1,5 @@
 """Shell command execution endpoint — runs cmd.exe or PowerShell, single and batch."""
+import logging
 import subprocess
 import time
 from typing import Literal
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from hermes_agent.security import verify_token
 
 router = APIRouter(tags=["exec"], dependencies=[Depends(verify_token)])
+_log = logging.getLogger("hermes-agent")
 
 
 class ExecRequest(BaseModel):
@@ -49,6 +51,7 @@ def _decode_output(result: subprocess.CompletedProcess) -> tuple[str, str]:
 
 def _run_command(command: str, shell: str, timeout: int) -> tuple[str, str, int]:
     """Run a command and return (stdout, stderr, exit_code)."""
+    _log.debug("exec command=%r shell=%s timeout=%s", command, shell, timeout)
     if not command:
         raise HTTPException(status_code=400, detail="Missing 'command' in request body")
     try:
