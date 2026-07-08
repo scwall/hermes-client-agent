@@ -6,11 +6,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
-from hermes_agent.audit_logger import get_audit_logger
+from hermes_agent.audit.models import AuditLog
 from hermes_agent.security import verify_local_or_token
 
 router = APIRouter(tags=["dashboard"], dependencies=[Depends(verify_local_or_token)])
-_audit = get_audit_logger()
 
 _templates = None
 
@@ -32,9 +31,9 @@ def init_templates(templates) -> None:
 
 
 def _render(page: str, request: Request, extra: Optional[dict] = None, data: Optional[dict] = None) -> HTMLResponse:
-    stats = _audit.get_stats()
+    stats = AuditLog.fetch_stats()
     if data is None:
-        data = _audit.get_logs(limit=50)
+        data = AuditLog.fetch_logs(limit=50)
     ctx = {
         "request": request,
         "stats": stats,
@@ -59,7 +58,7 @@ async def api_logs(
     search: Optional[str] = Query(None, description="Full-text search across all fields"),
 ):
     """Return paginated and filtered audit log entries."""
-    return _audit.get_logs(
+    return AuditLog.fetch_logs(
         limit=count,
         offset=offset,
         endpoint_filter=endpoint,
@@ -72,7 +71,7 @@ async def api_logs(
 @router.get("/api/stats", summary="Get aggregate audit statistics")
 async def api_stats():
     """Return summary statistics from the audit log."""
-    return _audit.get_stats()
+    return AuditLog.fetch_stats()
 
 
 @router.get("/api/logs/export", summary="Export audit logs as CSV or JSON")
@@ -85,7 +84,7 @@ async def api_logs_export(
 ):
     """Download filtered audit logs as a CSV or JSON file."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    content = _audit.export_logs(
+    content = AuditLog.export(
         fmt=format, limit=count, endpoint_filter=endpoint, status_filter=status, search=search,
     )
     mime = "application/json" if format == "json" else "text/csv"
@@ -100,13 +99,13 @@ async def api_logs_export(
 @router.post("/api/clear-logs", summary="Manually trigger log rotation")
 async def api_clear_logs():
     """Remove old log entries (older than 7 days) if the log file exceeds 10 MiB."""
-    return _audit.clear_old_logs()
+    return AuditLog.purge_older_than()
 
 
 @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False, summary="Main dashboard page")
 async def dashboard_page(request: Request):
     """Serve the main dashboard overview page."""
-    data = _audit.get_logs(limit=50)
+    data = AuditLog.fetch_logs(limit=50)
     return _render("pages/dashboard.html", request, {"active_page": "dashboard"}, data)
 
 
@@ -120,7 +119,7 @@ async def dashboard_logs_page(
     search: Optional[str] = Query(None),
 ):
     """Serve the filtered logs dashboard page."""
-    data = _audit.get_logs(limit=count, offset=offset, endpoint_filter=endpoint, status_filter=status, search=search)
+    data = AuditLog.fetch_logs(limit=count, offset=offset, endpoint_filter=endpoint, status_filter=status, search=search)
     return _render("pages/dashboard.html", request, {
         "active_page": "dashboard",
         "endpoint_filter": endpoint or "",
@@ -137,7 +136,7 @@ async def dashboard_errors_page(
     search: Optional[str] = Query(None),
 ):
     """Serve the errors-only dashboard page."""
-    data = _audit.get_logs(limit=count, offset=offset, status_filter="error", search=search)
+    data = AuditLog.fetch_logs(limit=count, offset=offset, status_filter="error", search=search)
     return _render("pages/errors.html", request, {
         "active_page": "errors",
         "status_filter": "error",
@@ -153,7 +152,7 @@ async def dashboard_exec_page(
     search: Optional[str] = Query(None),
 ):
     """Serve the executed-commands dashboard page."""
-    data = _audit.get_logs(limit=count, offset=offset, endpoint_filter="/exec", search=search)
+    data = AuditLog.fetch_logs(limit=count, offset=offset, endpoint_filter="/exec", search=search)
     return _render("pages/exec.html", request, {
         "active_page": "exec",
         "endpoint_filter": "/exec",

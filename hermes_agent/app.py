@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from hermes_agent.audit_logger import AuditMiddleware
+from hermes_agent.audit import AuditMiddleware
 from hermes_agent.config import PORT, TOKEN, log
 from hermes_agent.log_manager import RequestLoggingMiddleware, log_router, setup_log_capture
 from hermes_agent.modules import detect_modules
@@ -33,8 +33,10 @@ async def lifespan(app: FastAPI):
     setup_log_capture(logging.getLogger())
     log.info("Hermes Agent starting on port %s", PORT)
     log.info("Token: %s...%s", TOKEN[:6], TOKEN[-4:] if len(TOKEN) > 10 else "****")
+    from hermes_agent.audit import get_audit_logger
+    get_audit_logger()  # initialize DB singleton
     yield
-    from hermes_agent.audit_logger import get_audit_logger
+    from hermes_agent.audit import get_audit_logger
     get_audit_logger().close()
     log.info("Hermes Agent shutting down")
 
