@@ -139,8 +139,8 @@ def _capabilities_handler(args: dict[str, Any], **kwargs: Any) -> str:
 def _exec_handler(args: dict[str, Any], **kwargs: Any) -> str:
     command = str(args.get("command", ""))
     shell = str(args.get("shell", "cmd"))
-    if shell.lower() == "powershell":
-        command = f"chcp 65001 > nul && {command}"
+    if shell.lower() in ("powershell", "ps"):
+        command = f"[Console]::OutputEncoding = [Text.Encoding]::UTF8; {command}"
     else:
         command = f"chcp 65001 > nul & {command}"
     timeout = int(args.get("timeout", 15))

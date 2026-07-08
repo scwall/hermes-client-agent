@@ -93,7 +93,7 @@ class TestHandlers:
         with _mock_request('{"stdout":"hello","exit_code":0}') as mock:
             r = json.loads(tools._exec_handler({"command": "Write-Output hello", "shell": "powershell"}))
             cmd = mock.call_args[1]["json_data"]["command"]
-            assert "chcp 65001 > nul &&" in cmd
+            assert "OutputEncoding" in cmd
 
     def test_file_read(self):
         with _mock_request('{"path":"/f","content":"data"}'):
