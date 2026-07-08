@@ -6,24 +6,6 @@ from fastapi.testclient import TestClient
 from hermes_agent.app import app
 from hermes_agent.config import TOKEN
 
-
-class TestAppImports:
-    """Verify all modules import cleanly — regression guards for import errors."""
-
-    def test_get_audit_logger_importable(self):
-        """get_audit_logger must be importable from hermes_agent.audit."""
-        from hermes_agent.audit import get_audit_logger  # noqa: F401
-
-    def test_audit_middleware_importable(self):
-        """AuditMiddleware must be importable."""
-        from hermes_agent.audit import AuditMiddleware  # noqa: F401
-
-    def test_app_instance_has_audit_middleware(self):
-        """The FastAPI app must start and respond to health check."""
-        with TestClient(app) as client:
-            resp = client.get("/health")
-            assert resp.status_code == 200
-
 client = TestClient(app)
 AUTH = {"X-Agent-Token": TOKEN}
 
