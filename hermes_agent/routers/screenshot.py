@@ -1,7 +1,10 @@
 """Screenshot capture endpoint — full screen or region as base64 with optional compression."""
 import base64
 import ctypes
+import os
 import struct
+import subprocess
+import sys
 from io import BytesIO
 from typing import Optional
 
@@ -10,20 +13,30 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from hermes_agent.security import verify_token
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageGrab
 except Exception:
     Image = None
+    ImageGrab = None
 
 router = APIRouter(tags=["screenshot"], dependencies=[Depends(verify_token)])
 
 
+def _has_display() -> bool:
+    """Check whether a graphical display (X11 or Wayland) is available."""
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
 def _get_screen_width() -> int:
     """Get the primary monitor width in pixels (Windows only)."""
+    if sys.platform != "win32":
+        raise OSError("Not available on this platform")
     return ctypes.windll.user32.GetSystemMetrics(0)
 
 
 def _get_screen_height() -> int:
     """Get the primary monitor height in pixels (Windows only)."""
+    if sys.platform != "win32":
+        raise OSError("Not available on this platform")
     return ctypes.windll.user32.GetSystemMetrics(1)
 
 
@@ -32,6 +45,8 @@ def _capture_screen_rgba() -> tuple:
 
     Returns (rgba_bytes, width, height).
     """
+    if sys.platform != "win32":
+        raise OSError("Screenshot not available on this platform")
     user32 = ctypes.windll.user32
     gdi32 = ctypes.windll.gdi32
     width = user32.GetSystemMetrics(0)
@@ -64,6 +79,82 @@ def _capture_screen_rgba() -> tuple:
     return b"".join(rows), width, height
 
 
+def _capture_screen_pil() -> tuple:
+    """Capture the full screen using PIL ImageGrab (X11/Wayland).
+
+    Returns (rgba_bytes, width, height).
+    """
+    if ImageGrab is None:
+        raise OSError("PIL ImageGrab not available — install Pillow")
+    img = ImageGrab.grab()
+    w, h = img.size
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+    return img.tobytes("raw", "RGBA"), w, h
+
+
+def _capture_screen_subprocess() -> tuple:
+    """Capture the screen using external tools (ImageMagick import, grim, scrot).
+
+    Returns (rgba_bytes, width, height).
+    """
+    tools = [
+        ["import", "-window", "root"],
+        ["grim"],
+        ["scrot"],
+        ["gnome-screenshot", "-f"],
+    ]
+    path = "/tmp/_hermes_screenshot.png"
+    for cmd_start in tools:
+        try:
+            rc = subprocess.call(["which", cmd_start[0]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if rc == 0:
+                subprocess.run(
+                    cmd_start + [path],
+                    timeout=10, check=True, capture_output=True,
+                )
+                return _file_to_rgba(path)
+        except Exception:
+            continue
+    raise OSError("No screenshot tool available — install grim, import (ImageMagick), or scrot")
+
+
+def _file_to_rgba(path: str) -> tuple:
+    """Load a PNG file from disk and return (rgba_bytes, width, height)."""
+    if Image is not None:
+        img = Image.open(path)
+        w, h = img.size
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        data = img.tobytes("raw", "RGBA")
+        return data, w, h
+    with open(path, "rb") as f:
+        raw = f.read()
+    return raw, len(raw), len(raw)
+
+
+def _capture_screen() -> tuple:
+    """Capture the full screen using OS-appropriate method.
+
+    Returns (rgba_bytes, width, height).
+    Raises HTTPException(503) if no capture method is available.
+    """
+    if sys.platform == "win32":
+        return _capture_screen_rgba()
+    if _has_display():
+        try:
+            return _capture_screen_pil()
+        except Exception:
+            try:
+                return _capture_screen_subprocess()
+            except Exception as e:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Screenshot failed: no capture tool available ({e})",
+                )
+    raise HTTPException(status_code=503, detail="Screenshot not available: no display detected")
+
+
 def _rgba_to_image(rgba_data: bytes, width: int, height: int) -> "Image.Image":
     """Convert raw RGBA bytes to a PIL Image."""
     if Image is None:
@@ -93,7 +184,8 @@ async def screenshot(
     """Take a screenshot of the full primary monitor, or a specific region.
 
     Supports optional compression via scale, quality, and format parameters.
-    Returns a JSON object with the base64-encoded image and its dimensions.
+    On Windows uses Win32 GDI. On Linux uses PIL ImageGrab or external tools
+    (grim, ImageMagick import, scrot). Returns 503 on headless systems.
 
     - ``scale`` : resize factor (0.1 to 1.0). Default 1.0 = full resolution.
     - ``quality`` : JPEG quality (1-100). Default 70. Ignored for PNG.
@@ -103,16 +195,13 @@ async def screenshot(
         raise HTTPException(status_code=422, detail="format must be 'jpeg' or 'png'")
 
     try:
+        rgba_data, sw, sh = _capture_screen()
+        img = _rgba_to_image(rgba_data, sw, sh)
         if region:
             parts = [int(p.strip()) for p in region.split(",")]
             if len(parts) != 4:
                 raise HTTPException(status_code=400, detail="Region must be x,y,w,h")
-            rgba_data, sw, sh = _capture_screen_rgba()
-            img = _rgba_to_image(rgba_data, sw, sh)
             img = img.crop((parts[0], parts[1], parts[0] + parts[2], parts[1] + parts[3]))
-        else:
-            rgba_data, sw, sh = _capture_screen_rgba()
-            img = _rgba_to_image(rgba_data, sw, sh)
     except HTTPException:
         raise
     except Exception as e:

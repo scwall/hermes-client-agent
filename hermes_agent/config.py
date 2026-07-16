@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 import logging
 import os
+import sys
 from pathlib import Path
 
 try:
@@ -18,7 +19,10 @@ if _ALLOWED_ENV:
     ALLOWED_PATHS = _ALLOWED_ENV.split(os.pathsep)
 else:
     user_home = str(Path.home())
-    ALLOWED_PATHS = [os.path.join(user_home, ""), "D:\\"]
+    if sys.platform == "win32":
+        ALLOWED_PATHS = [os.path.join(user_home, ""), "D:\\"]
+    else:
+        ALLOWED_PATHS = [os.path.join(user_home, ""), "/tmp"]
 
 HOST = os.environ.get("HERMES_AGENT_HOST", "0.0.0.0")
 PORT = int(os.environ.get("HERMES_AGENT_PORT", "8765"))

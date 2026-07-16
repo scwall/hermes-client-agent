@@ -1,6 +1,8 @@
 """Shell command execution endpoint — runs cmd.exe or PowerShell, single and batch."""
 import logging
+import os
 import subprocess
+import sys
 import time
 from typing import Literal
 
@@ -49,38 +51,64 @@ def _decode_output(result: subprocess.CompletedProcess) -> tuple[str, str]:
     return stdout, stderr
 
 
-def _run_command(command: str, shell: str, timeout: int) -> tuple[str, str, int]:
-    """Run a command and return (stdout, stderr, exit_code)."""
+def _build_shell_args(shell: str, command: str) -> tuple[list[str], str]:
+    """Build the platform-appropriate shell invocation.
+
+    On Windows:  'cmd' → cmd.exe /c, 'powershell'/'ps' → powershell -Command
+    On Linux:    'cmd'/'powershell'/'ps' → /bin/bash -c,
+                 'powershell'/'ps' → pwsh -Command if available, else bash.
+
+    Returns (argv_list, actual_shell_name).
+    """
+    shell_lower = shell.lower()
+
+    if sys.platform == "win32":
+        if shell_lower in ("powershell", "ps"):
+            return (["powershell", "-Command", command], "powershell")
+        return (["cmd", "/c", command], "cmd")
+
+    if shell_lower in ("powershell", "ps"):
+        if os.path.exists("/usr/bin/pwsh"):
+            return (["pwsh", "-Command", command], "pwsh")
+        if os.path.exists("/snap/bin/pwsh"):
+            return (["/snap/bin/pwsh", "-Command", command], "pwsh")
+        _log.info("Exec: powershell requested but pwsh not found, falling back to bash")
+        return (["bash", "-c", command], "bash (powershell→bash)")
+
+    return (["bash", "-c", command], "bash (cmd→bash)")
+
+
+def _run_command(command: str, shell: str, timeout: int) -> dict:
+    """Run a command and return (stdout, stderr, exit_code, shell).
+
+    On Linux, cmd/powershell shells are automatically mapped to bash.
+    """
     _log.debug("exec command=%r shell=%s timeout=%s", command, shell, timeout)
     if not command:
         raise HTTPException(status_code=400, detail="Missing 'command' in request body")
     try:
-        if shell.lower() in ("powershell", "ps"):
-            proc = subprocess.run(
-                ["powershell", "-Command", command],
-                capture_output=True, timeout=timeout,
-            )
-        else:
-            proc = subprocess.run(
-                ["cmd", "/c", command],
-                capture_output=True, timeout=timeout,
-            )
+        cmd_argv, actual_shell = _build_shell_args(shell, command)
+        proc = subprocess.run(
+            cmd_argv,
+            capture_output=True, timeout=timeout,
+        )
         stdout, stderr = _decode_output(proc)
-        return stdout, stderr, proc.returncode
+        return {"stdout": stdout, "stderr": stderr, "exit_code": proc.returncode, "shell": actual_shell}
     except subprocess.TimeoutExpired:
-        return "", f"Command timed out after {timeout} seconds", -1
+        return {"stdout": "", "stderr": f"Command timed out after {timeout} seconds", "exit_code": -1, "shell": shell}
     except Exception as e:
-        return "", str(e), -1
+        return {"stdout": "", "stderr": str(e), "exit_code": -1, "shell": shell}
 
 
 @router.post("/exec", summary="Execute a shell command")
 async def exec_command(body: ExecRequest):
-    """Run a command via cmd.exe or PowerShell, returning stdout, stderr, and exit code.
+    """Run a command via cmd.exe or PowerShell on Windows, bash on Linux.
 
+    On Linux, 'cmd' and 'powershell' shells are automatically mapped to bash.
+    The response includes the actual shell used in the 'shell' field.
     Supports a configurable timeout in seconds (default: 30).
     """
-    stdout, stderr, exit_code = _run_command(body.command, body.shell, body.timeout)
-    return {"stdout": stdout, "stderr": stderr, "exit_code": exit_code}
+    return _run_command(body.command, body.shell, body.timeout)
 
 
 @router.post("/exec/batch", summary="Execute multiple commands sequentially")
@@ -95,17 +123,18 @@ async def exec_batch(request: BatchExecRequest):
 
     for i, cmd in enumerate(request.commands):
         start = time.perf_counter()
-        stdout, stderr, exit_code = _run_command(cmd.command, cmd.shell, cmd.timeout)
+        result = _run_command(cmd.command, cmd.shell, cmd.timeout)
         duration_ms = int((time.perf_counter() - start) * 1000)
         results.append({
             "index": i,
             "command": cmd.command,
-            "stdout": stdout,
-            "stderr": stderr,
-            "exit_code": exit_code,
+            "stdout": result["stdout"],
+            "stderr": result["stderr"],
+            "exit_code": result["exit_code"],
+            "shell": result.get("shell", cmd.shell),
             "duration_ms": duration_ms,
         })
-        if exit_code != 0 and request.stop_on_error:
+        if result["exit_code"] != 0 and request.stop_on_error:
             break
 
     total_duration_ms = int((time.perf_counter() - total_start) * 1000)

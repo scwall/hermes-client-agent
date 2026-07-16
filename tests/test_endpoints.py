@@ -1,5 +1,6 @@
 """Integration tests for API endpoints using FastAPI TestClient."""
 import os
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -156,7 +157,8 @@ class TestScreenshotEndpoint:
 
     def test_screenshot_default_png(self):
         """GET /screenshot without params returns PNG full size."""
-        resp = client.get("/screenshot", headers=AUTH)
+        with mock.patch("hermes_agent.routers.screenshot._capture_screen", return_value=(b"\x00" * 100 * 100 * 4, 100, 100)):
+            resp = client.get("/screenshot", headers=AUTH)
         assert resp.status_code == 200
         data = resp.json()
         assert data["format"] == "png"
@@ -166,7 +168,8 @@ class TestScreenshotEndpoint:
 
     def test_screenshot_jpeg_scaled(self):
         """GET /screenshot with scale=0.5 and format=jpeg returns compressed JPEG."""
-        resp = client.get("/screenshot", params={"scale": 0.5, "format": "jpeg", "quality": 50}, headers=AUTH)
+        with mock.patch("hermes_agent.routers.screenshot._capture_screen", return_value=(b"\x00" * 200 * 200 * 4, 200, 200)):
+            resp = client.get("/screenshot", params={"scale": 0.5, "format": "jpeg", "quality": 50}, headers=AUTH)
         assert resp.status_code == 200
         data = resp.json()
         assert data["format"] == "jpeg"
