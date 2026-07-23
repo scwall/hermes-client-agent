@@ -15,6 +15,7 @@ if _plugin_debug:
     _log.setLevel(logging.DEBUG)
 
 _ctx = None
+_agent_status: dict[str, bool] = {}
 
 
 def set_plugin_context(ctx: Any) -> None:
@@ -76,6 +77,23 @@ def _mask_token(token: str) -> str:
     return token[:6] + "***" + token[-4:]
 
 
+def _check_agent(agent_name: str, cfg: dict[str, Any]) -> bool:
+    """Silently check if an agent is reachable. Warns only once per failure."""
+    if agent_name in _agent_status:
+        return _agent_status[agent_name]
+    ok = False
+    try:
+        health_url = f"{cfg['url'].rstrip('/')}/health"
+        r = requests.get(health_url, headers={"X-Agent-Token": cfg["token"]}, timeout=5)
+        ok = r.status_code == 200
+    except Exception:
+        pass
+    _agent_status[agent_name] = ok
+    if not ok:
+        _log.warning("Agent '%s' unreachable at %s", agent_name, cfg['url'])
+    return ok
+
+
 def _make_request(
     method: str,
     path: str,
@@ -91,8 +109,10 @@ def _make_request(
     """
     config, _ = _load_config()
     cfg = _get_agent_config(config, agent)
+    agent_name = agent or config.get("default_agent") or next(iter(config.get("agents", {})), "default")
     url = f"{cfg['url'].rstrip('/')}{path}"
     headers = {"X-Agent-Token": cfg["token"]}
+    _check_agent(agent_name, cfg)
     if _plugin_debug:
         _log.debug("-> %s %s %s json=%s url=%s timeout=%ss",
                    agent or "default", method, path,
@@ -309,41 +329,3 @@ def _open_app_handler(args: dict[str, Any], **kwargs: Any) -> str:
         return json.dumps({"exec": exec_result, "focus": focus_result})
 
     return json.dumps({"exec": exec_result})
-
-
-# ---------------------------------------------------------------------------
-# Hook: on_session_start
-# ---------------------------------------------------------------------------
-
-def on_session_start(ctx: Any = None, **kwargs: Any) -> None:
-    """Ping all configured agents on session start."""
-    if ctx:
-        set_plugin_context(ctx)
-
-    try:
-        config, source = _load_config()
-    except RuntimeError as exc:
-        print(f"[windows_control] {exc}")
-        return
-
-    agents = config.get("agents", {})
-    agent_names = ", ".join(agents.keys()) if agents else "(none)"
-    print(f"[windows_control] Loaded {len(agents)} agent(s) from {source}: {agent_names}")
-
-    for name, cfg in agents.items():
-        try:
-            url = f"{cfg['url'].rstrip('/')}/health"
-            headers = {"X-Agent-Token": cfg["token"]}
-            r = requests.get(url, headers=headers, timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                status_msg = f"healthy (status: {data.get('status', 'ok')})"
-            else:
-                status_msg = f"status {r.status_code}"
-        except requests.exceptions.ConnectionError:
-            status_msg = "unreachable (connection refused)"
-        except requests.exceptions.Timeout:
-            status_msg = "unreachable (timeout)"
-        except Exception as exc:
-            status_msg = f"error: {exc}"
-        print(f"[windows_control] Agent '{name}' ({cfg['url']}) — {status_msg}")

@@ -57,7 +57,6 @@ from .tools import (
     _window_active_handler,
     _window_focus_handler,
     _window_list_handler,
-    on_session_start,
     set_plugin_context,
 )
 
@@ -65,7 +64,6 @@ from .tools import (
 def register(ctx: Any) -> None:
     """Register the windows-control plugin with the Hermes runtime."""
     set_plugin_context(ctx)
-    ctx.register_hook("on_session_start", on_session_start)
 
     try:
         from .tools import _load_config as _lc
