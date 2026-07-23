@@ -234,50 +234,18 @@ class TestHandlers:
         r = json.loads(tools._open_app_handler({"executable": ""}))
         assert r["error"] == "missing executable"
 
-    def test_acp_auto_spawn_on_503(self):
-        with patch.object(tools, "_make_request") as mock:
-            mock.side_effect = [
-                json.dumps({"error": "http_503"}),
-                json.dumps({"session_id": "acp-test", "port": 4444, "status": "created"}),
-                json.dumps({"task_id": "t_abc123def456", "status": "running"}),
-                json.dumps({"task_id": "t_abc123def456", "status": "completed", "result": {"parts": [{"type": "text", "text": "OK"}]}}),
-            ]
-            result = json.loads(tools._acp_handler({"agent_url": "http://localhost:4444", "prompt": "test", "timeout": 60}))
-            assert result["task_id"] == "t_abc123def456"
-            assert result["mode"] == "sync"
-            assert mock.call_count >= 3
-
     def test_acp_direct_success(self):
-        with patch.object(tools, "_make_request") as mock:
-            mock.side_effect = [
-                json.dumps({"task_id": "t_ok1234567890", "status": "running"}),
-                json.dumps({"task_id": "t_ok1234567890", "status": "completed", "result": {"parts": [{"type": "text", "text": "OK"}]}}),
-            ]
-            result = json.loads(tools._acp_handler({"agent_url": "http://localhost:4444", "prompt": "test"}))
-            assert result["mode"] == "sync"
-            assert result.get("result") is not None
+        with _mock_request('{"task_id":"t_ok123","status":"completed","mode":"sync","result":{"text":"OK"}}') as mock:
+            result = json.loads(tools._acp_handler({"prompt": "test"}))
+            assert result["task_id"] == "t_ok123"
+            assert result["status"] == "completed"
+            assert mock.call_args[0][1] == "/acp/tasks"
 
     def test_acp_async_timeout_returns_task_id(self):
-        with patch.object(tools, "_make_request") as mock:
-            responses = [json.dumps({"task_id": "t_slow12345678", "status": "running"})]
-            for _ in range(11):
-                responses.append(json.dumps({"task_id": "t_slow12345678", "status": "running"}))
-            mock.side_effect = responses
-            result = json.loads(tools._acp_handler({"agent_url": "http://localhost:4444", "prompt": "heavy task", "timeout": 300}))
-            assert result["mode"] == "async"
-            assert result["task_id"] == "t_slow12345678"
+        with _mock_request('{"task_id":"t_slow123","status":"running","mode":"async"}') as mock:
+            result = json.loads(tools._acp_handler({"prompt": "heavy task", "timeout": 300}))
+            assert result["task_id"] == "t_slow123"
             assert result["status"] == "running"
-
-    def test_acp_spawn_fails_no_retry_loop(self):
-        with patch.object(tools, "_make_request") as mock:
-            mock.side_effect = [
-                json.dumps({"error": "http_503"}),
-                json.dumps({"error": "agent_unreachable"}),
-                json.dumps({"error": "http_503"}),
-            ]
-            result = json.loads(tools._acp_handler({"agent_url": "http://localhost:4444", "prompt": "test", "timeout": 30}))
-            assert "error" in result
-            assert mock.call_count == 2
 
     def test_acp_poll(self):
         with _mock_request('{"task_id":"t_abc123","status":"completed","result":"OK"}') as mock:

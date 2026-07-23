@@ -1,3 +1,4 @@
-"""ACP module — session management for ACP agent lifecycle."""
-from hermes_agent.acp.session_manager import SessionManager as SessionManager
-from hermes_agent.acp.session_manager import get_session_manager as get_session_manager
+"""ACP module — runtime management and task relay."""
+
+from hermes_agent.acp.runtime_broker import get_runtime_broker as get_runtime_broker
+from hermes_agent.acp.task_service import get_task_service as get_task_service

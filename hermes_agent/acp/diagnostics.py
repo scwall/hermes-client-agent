@@ -252,10 +252,10 @@ def run_diagnostics(agent_type="opencode"):
 
     models_info = {"models": [], "providers": [], "default": None, "error": "No agent URL available"}
     ft = {"status": "skipped", "detail": "No agent URL available"}
-    from hermes_agent.acp import get_session_manager
+    from hermes_agent.acp.models import AcpRuntime
 
-    mgr = get_session_manager()
-    sessions = mgr.list_sessions()
+    runtimes = AcpRuntime.get_ready_managed()
+    sessions = [{"session_id": r["runtime_id"], "port": int(r["endpoint"].split(":")[-1]) if ":" in r.get("endpoint", "") else 0, "status": r["status"], "pid": r.get("pid")} for r in runtimes]
     if sessions:
         s = sessions[0]
         port = s["port"]

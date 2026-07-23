@@ -300,54 +300,11 @@ def _acp_handler(args: dict[str, Any], **kwargs: Any) -> str:
     agent = args.get("agent")
     acp_timeout = int(args.get("timeout", 300))
     json_data = {
-        "agent_url": str(args["agent_url"]),
         "prompt": str(args["prompt"]),
-        "context": str(args.get("context", "")) if args.get("context") else "",
         "model": str(args.get("model", "")) if args.get("model") else "",
         "timeout": acp_timeout,
     }
-
-    result = _make_request("POST", "/acp/async", json_data=json_data, timeout=10, agent=agent)
-    parsed = json.loads(result)
-
-    if isinstance(parsed, dict) and parsed.get("error") == "http_503":
-        _log.info("ACP agent unreachable — auto-spawning OpenCode")
-        spawn_result = _make_request("POST", "/acp/spawn", json_data={}, timeout=20, agent=agent)
-        try:
-            spawn_parsed = json.loads(spawn_result)
-        except (json.JSONDecodeError, TypeError):
-            spawn_parsed = {}
-        if isinstance(spawn_parsed, dict) and spawn_parsed.get("session_id"):
-            _log.info("OpenCode spawned (session %s, port %s) — retrying", spawn_parsed.get("session_id"), spawn_parsed.get("port"))
-            time.sleep(4)
-            result = _make_request("POST", "/acp/async", json_data=json_data, timeout=10, agent=agent)
-            parsed = json.loads(result)
-        else:
-            _log.warning("ACP auto-spawn failed: %s", spawn_parsed)
-
-    task_id = parsed.get("task_id", "")
-    if not task_id:
-        return result
-
-    for _ in range(10):
-        time.sleep(1)
-        poll_result = _make_request("GET", f"/acp/tasks/{task_id}", timeout=5, agent=agent)
-        try:
-            poll_parsed = json.loads(poll_result)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        status = poll_parsed.get("status", "")
-        if status == "completed":
-            poll_parsed["mode"] = "sync"
-            poll_parsed["task_id"] = task_id
-            return json.dumps(poll_parsed)
-        if status == "failed":
-            poll_parsed["mode"] = "sync"
-            poll_parsed["task_id"] = task_id
-            return json.dumps(poll_parsed)
-
-    _log.info("ACP task %s still running after 10s — returning async handle", task_id)
-    return json.dumps({"task_id": task_id, "status": "running", "mode": "async"})
+    return _make_request("POST", "/acp/tasks", json_data=json_data, timeout=acp_timeout + 10, agent=agent)
 
 
 def _acp_poll_handler(args: dict[str, Any], **kwargs: Any) -> str:

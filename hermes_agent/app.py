@@ -8,7 +8,8 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from hermes_agent.acp import get_session_manager
+from hermes_agent.acp import get_runtime_broker
+from hermes_agent.acp.models import AcpTask
 from hermes_agent.audit import AuditMiddleware, get_audit_logger
 from hermes_agent.config import PORT, TOKEN, log
 from hermes_agent.log_manager import RequestLoggingMiddleware, log_router, setup_log_capture
@@ -30,18 +31,15 @@ from hermes_agent.routers.windows import router as windows_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: detect modules, set up log capture, start ACP session manager.
-    Shutdown: stop ACP sessions, log stop message."""
     detect_modules()
     setup_log_capture(logging.getLogger())
     log.info("Hermes Agent starting on port %s", PORT)
     log.info("Token: %s...%s", TOKEN[:6], TOKEN[-4:] if len(TOKEN) > 10 else "****")
     get_audit_logger()
-    mgr = get_session_manager()
-    mgr.start_heartbeat()
-    log.info("ACP session manager started")
+    broker = get_runtime_broker()
+    AcpTask.reconcile_on_startup()
+    log.info("ACP runtime broker ready")
     yield
-    mgr.shutdown()
     get_audit_logger().close()
     log.info("Hermes Agent shutting down")
 
