@@ -183,3 +183,88 @@ class TestProviderInference:
         from hermes_agent.routers.acp import _infer_provider
 
         assert _infer_provider("unknown-model") == ""
+
+
+class TestAcpAsync:
+    """Tests for POST /acp/async and GET /acp/tasks/{id}."""
+
+    def test_async_submit_returns_task_id(self):
+        with mock.patch("hermes_agent.routers.acp.AcpSession.get_active_on_port", return_value=None):
+            with mock.patch("hermes_agent.routers.acp.AcpTask.create_task"):
+                resp = client.post(
+                    "/acp/async",
+                    json={"agent_url": "http://localhost:4096", "prompt": "hello", "timeout": 60},
+                    headers=AUTH,
+                )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "running"
+        assert data["task_id"].startswith("t_")
+        assert len(data["task_id"]) == 14
+
+    def test_async_missing_agent_url(self):
+        resp = client.post("/acp/async", json={"prompt": "hello"}, headers=AUTH)
+        assert resp.status_code == 422
+
+    def test_async_missing_prompt(self):
+        resp = client.post("/acp/async", json={"agent_url": "http://localhost:4096"}, headers=AUTH)
+        assert resp.status_code == 422
+
+    def test_get_task_not_found(self):
+        resp = client.get("/acp/tasks/t_nonexistent", headers=AUTH)
+        assert resp.status_code == 404
+
+    def test_get_running_task(self):
+        with mock.patch("hermes_agent.routers.acp.AcpTask.get_by_task_id") as mock_get:
+            mock_task = mock.MagicMock()
+            mock_task.task_id = "t_abc123def456"
+            mock_task.session_id = None
+            mock_task.status = "running"
+            mock_task.created_at = "2026-01-01T00:00:00"
+            mock_task.completed_at = None
+            mock_task.error = None
+            mock_get.return_value = mock_task
+
+            resp = client.get("/acp/tasks/t_abc123def456", headers=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "running"
+        assert data["task_id"] == "t_abc123def456"
+
+    def test_get_completed_task(self):
+        with mock.patch("hermes_agent.routers.acp.AcpTask.get_by_task_id") as mock_get:
+            mock_task = mock.MagicMock()
+            mock_task.task_id = "t_done12345678"
+            mock_task.session_id = None
+            mock_task.status = "completed"
+            mock_task.result = '{"success":true,"response":"OK"}'
+            mock_task.created_at = "2026-01-01T00:00:00"
+            mock_task.completed_at = "2026-01-01T00:02:00"
+            mock_task.error = None
+            mock_get.return_value = mock_task
+
+            resp = client.get("/acp/tasks/t_done12345678", headers=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "completed"
+        assert data["result"] == {"success": True, "response": "OK"}
+
+    def test_existing_acp_still_works(self):
+        session_resp = mock.MagicMock()
+        session_resp.status_code = 200
+        session_resp.json.return_value = {"id": "ses_test", "directory": "/home/test"}
+
+        message_resp = mock.MagicMock()
+        message_resp.status_code = 200
+        message_resp.json.return_value = {"result": "hello"}
+
+        with mock.patch("hermes_agent.routers.acp.httpx.AsyncClient") as mock_client:
+            instance = mock_client.return_value.__aenter__.return_value
+            instance.post.side_effect = [session_resp, message_resp]
+            resp = client.post(
+                "/acp",
+                json={"agent_url": "http://localhost:4096", "prompt": "hello"},
+                headers=AUTH,
+            )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True

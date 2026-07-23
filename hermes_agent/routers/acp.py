@@ -1,6 +1,9 @@
 """ACP bridge — relay tasks to any ACP-compatible agent via HTTP, with session management."""
 
+import asyncio
+import json
 import logging
+import secrets
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -10,13 +13,15 @@ from pydantic import BaseModel, Field
 
 from hermes_agent.acp import get_session_manager
 from hermes_agent.acp.diagnostics import run_diagnostics
-from hermes_agent.acp.models import AcpSession
+from hermes_agent.acp.models import AcpSession, AcpTask
 from hermes_agent.security import verify_token
 
 router = APIRouter(tags=["acp"], dependencies=[Depends(verify_token)])
 _log = logging.getLogger("hermes-agent")
 
 DEFAULT_TIMEOUT = 300
+MAX_CONCURRENT_ASYNC_TASKS = 10
+_async_semaphore = asyncio.Semaphore(MAX_CONCURRENT_ASYNC_TASKS)
 
 PROVIDER_MAP = {
     "deepseek": "deepseek",
@@ -234,3 +239,90 @@ async def acp_stop_session(session_id: str):
 @router.get("/acp/diagnostics", summary="Run ACP diagnostics to inspect agent config and health")
 async def acp_diagnostics(agent_type: str = Query("opencode", description="ACP agent type to diagnose")):
     return run_diagnostics(agent_type)
+
+
+class AsyncAcpRequest(BaseModel):
+    agent_url: str = Field(..., description="Base URL of the ACP agent")
+    prompt: str = Field(..., description="The task prompt to send")
+    context: Optional[str] = Field(None, description="Additional context for the task")
+    model: Optional[str] = Field(None, description="Model ID to use")
+    timeout: int = Field(DEFAULT_TIMEOUT, ge=1, le=3600, description="Max wait time in seconds")
+
+
+async def _run_async_task(task_id: str, body: AsyncAcpRequest):
+    async with _async_semaphore:
+        agent_url = body.agent_url.rstrip("/")
+        payload: dict = {"prompt": body.prompt}
+        if body.context:
+            payload["context"] = body.context
+        if body.model:
+            payload["model"] = body.model
+
+        acp_session = None
+        if "127.0.0.1" in agent_url or "localhost" in agent_url:
+            parsed = urlparse(agent_url)
+            port = parsed.port or 4444
+            acp_session = AcpSession.get_active_on_port(port)
+
+        try:
+            result = await _relay_to_opencode(agent_url, payload, body.timeout, acp_session)
+            AcpTask.mark_completed(task_id, json.dumps(result, default=str))
+        except HTTPException as exc:
+            AcpTask.mark_failed(task_id, exc.detail)
+        except Exception as exc:
+            AcpTask.mark_failed(task_id, f"Unexpected error: {exc}")
+
+
+@router.post("/acp/async", summary="Submit an ACP task asynchronously — returns immediately")
+async def acp_async_submit(body: AsyncAcpRequest):
+    task_id = "t_" + secrets.token_hex(6)
+
+    agent_url = body.agent_url.rstrip("/")
+    acp_session = None
+    session_id = None
+    if "127.0.0.1" in agent_url or "localhost" in agent_url:
+        parsed = urlparse(agent_url)
+        port = parsed.port or 4444
+        acp_session = AcpSession.get_active_on_port(port)
+        if acp_session:
+            session_id = acp_session.session_id
+
+    AcpTask.create_task(
+        task_id=task_id,
+        session_id=session_id,
+        prompt=body.prompt,
+        agent_url=agent_url,
+        timeout=body.timeout,
+        model=body.model or "",
+        context=body.context or "",
+    )
+
+    asyncio.create_task(_run_async_task(task_id, body))
+
+    _log.info("ACP async task %s submitted: prompt=%r", task_id, body.prompt[:120])
+    return {"task_id": task_id, "status": "running"}
+
+
+@router.get("/acp/tasks/{task_id}", summary="Get the status and result of an async ACP task")
+async def acp_task_status(task_id: str):
+    task = AcpTask.get_by_task_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    response = {
+        "task_id": task.task_id,
+        "session_id": task.session_id,
+        "status": task.status,
+        "created_at": task.created_at,
+        "completed_at": task.completed_at,
+    }
+
+    if task.status == "completed":
+        try:
+            response["result"] = json.loads(task.result)
+        except (json.JSONDecodeError, TypeError):
+            response["result"] = {"raw": task.result[:10000] if task.result else ""}
+    elif task.status == "failed":
+        response["error"] = task.error
+
+    return response

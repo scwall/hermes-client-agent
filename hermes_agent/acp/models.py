@@ -31,9 +31,11 @@ class AcpSession(Model):
     def init_db(cls, db_path=None):
         path = Path(db_path if db_path else (DB_DIR / "acp_sessions.db")).resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
-        cls._meta.database = SqliteDatabase(str(path), pragmas={"journal_mode": "wal", "foreign_keys": "on"})
-        cls._meta.database.connect()
-        cls._meta.database.create_tables([cls], safe=True)
+        database = SqliteDatabase(str(path), pragmas={"journal_mode": "wal", "foreign_keys": "on"})
+        database.connect()
+        cls._meta.database = database
+        AcpTask._meta.database = database
+        database.create_tables([cls, AcpTask], safe=True)
         cls._migrate_schema()
 
     @classmethod
@@ -140,3 +142,89 @@ class AcpSession(Model):
             row.opencode_session_id = opencode_session_id
             row.opencode_directory = opencode_directory
             row.save()
+
+
+class AcpTask(Model):
+    task_id = CharField(primary_key=True, max_length=16)
+    session_id = CharField(max_length=64, null=True, index=True)
+    prompt = CharField(max_length=4096)
+    agent_url = CharField(max_length=512)
+    timeout = IntegerField(default=300)
+    model = CharField(max_length=128, null=True)
+    context = CharField(max_length=4096, null=True)
+    status = CharField(max_length=16, default="running")
+    result = CharField(max_length=1048576, null=True)
+    error = CharField(max_length=1024, null=True)
+    created_at = CharField(max_length=30)
+    completed_at = CharField(max_length=30, null=True)
+
+    class Meta:
+        table_name = "acp_tasks"
+
+    @classmethod
+    def _ensure_db(cls):
+        if cls._meta.database is None or cls._meta.database.is_closed():
+            AcpSession.init_db()
+
+    @classmethod
+    def create_task(cls, task_id, session_id, prompt, agent_url, timeout, model, context):
+        now = datetime.now(timezone.utc).isoformat()
+        cls._ensure_db()
+        cls.create(
+            task_id=task_id,
+            session_id=session_id,
+            prompt=prompt,
+            agent_url=agent_url,
+            timeout=timeout,
+            model=model or "",
+            context=context or "",
+            status="running",
+            created_at=now,
+        )
+
+    @classmethod
+    def mark_completed(cls, task_id, result_json):
+        cls._ensure_db()
+        if len(result_json) > 1048576:
+            result_json = result_json[:1048576]
+        cls.update(
+            status="completed",
+            result=result_json,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+        ).where(cls.task_id == task_id).execute()
+
+    @classmethod
+    def mark_failed(cls, task_id, error_msg):
+        cls._ensure_db()
+        cls.update(
+            status="failed",
+            error=error_msg[:1024],
+            completed_at=datetime.now(timezone.utc).isoformat(),
+        ).where(cls.task_id == task_id).execute()
+
+    @classmethod
+    def get_by_task_id(cls, task_id):
+        cls._ensure_db()
+        return cls.get_or_none(cls.task_id == task_id)
+
+    @classmethod
+    def count_running(cls):
+        cls._ensure_db()
+        return cls.select().where(cls.status == "running").count()
+
+    @classmethod
+    def fail_tasks_for_session(cls, session_id):
+        cls._ensure_db()
+        cls.update(
+            status="failed",
+            error="ACP session stopped",
+            completed_at=datetime.now(timezone.utc).isoformat(),
+        ).where((cls.session_id == session_id) & (cls.status == "running")).execute()
+
+    @classmethod
+    def cleanup_old(cls, max_age_hours=24):
+        cls._ensure_db()
+        from datetime import timedelta
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
+        cls.delete().where((cls.status != "running") & (cls.completed_at.is_null(False)) & (cls.completed_at < cutoff)).execute()

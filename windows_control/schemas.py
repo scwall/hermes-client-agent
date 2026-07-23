@@ -305,31 +305,49 @@ WINDOWS_SYSTEM_SCHEMA = _s(
 
 WINDOWS_ACP_SCHEMA = _s(
     "windows_acp",
-    "Relay a task to an ACP-compatible AI coding agent (OpenCode, Claude Code, Junie, etc.) running on the remote machine. The agent_url points to the ACP agent's HTTP endpoint.",
+    "Delegate a coding task to a standalone AI coding agent (OpenCode, Claude Code, or Junie) running "
+    "on the remote machine. This tool is smart: it submits the task asynchronously, then polls internally "
+    "for up to 10 seconds. If the task completes within 10s, the full result is returned directly with "
+    '"mode": "sync". If the task is still running after 10s, it returns a task_id with "mode": "async" '
+    "— you MUST then use windows_acp_poll(task_id) to check for completion and retrieve the result. "
+    "Sessions are reused across calls for conversation continuity. The model provider is auto-detected "
+    "from the model name. If the coding agent is not running, it spawns automatically.",
     {
         "agent_url": {
             "type": "string",
-            "description": "Base URL of the ACP agent (e.g. 'http://localhost:4096' for OpenCode).",
+            "description": ("URL of the AI coding agent on the REMOTE machine (NOT the hermes-client-agent URL). Use 'http://localhost:4444' in most cases — the session manager spawns there automatically. Other examples: 'http://localhost:4096' for OpenCode launched by PyCharm. Spawned automatically if not running — no manual setup needed."),
         },
         "prompt": {
             "type": "string",
-            "description": "The task prompt to send to the ACP agent.",
+            "description": ("The coding task to delegate. Describe what you need: implement a feature, refactor a module, debug an error, review a codebase, write tests, analyze dependencies, etc. The AI coding agent has full filesystem access on the remote machine and can read, write, edit files, run shell commands, and search the codebase. Be specific."),
         },
         "context": {
             "type": "string",
-            "description": "Optional additional context for the task.",
+            "description": "Optional background: project structure, file paths, tech stack, constraints, previous attempts.",
         },
         "model": {
             "type": "string",
-            "description": "Optional model ID to use (agent-specific).",
+            "description": ("Optional model ID (e.g. 'deepseek-chat', 'deepseek-v4-pro', 'claude-sonnet-4', 'gpt-4o'). Provider is auto-detected. Omit to use the OpenCode default."),
         },
         "timeout": {
             "type": "integer",
-            "description": "Max wait time in seconds (default: 300).",
+            "description": "Max task duration in seconds (default: 300). Increase for complex multi-file changes.",
             "default": 300,
         },
     },
     ["agent_url", "prompt"],
+)
+
+WINDOWS_ACP_POLL_SCHEMA = _s(
+    "windows_acp_poll",
+    "Check the status of an async ACP task submitted via windows_acp_async. Returns 'running', 'completed' (with result), or 'failed' (with error). Poll periodically (every 5-10s) until the task completes.",
+    {
+        "task_id": {
+            "type": "string",
+            "description": "The task_id returned by windows_acp_async (format: 't_xxxxxxxxxxxx').",
+        },
+    },
+    ["task_id"],
 )
 
 WINDOWS_OPEN_APP_SCHEMA = _s(

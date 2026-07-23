@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from .schemas import (
+    WINDOWS_ACP_POLL_SCHEMA,
     WINDOWS_ACP_SCHEMA,
     WINDOWS_CAPABILITIES_SCHEMA,
     WINDOWS_EXEC_BATCH_SCHEMA,
@@ -36,6 +37,7 @@ from .schemas import (
 )
 from .tools import (
     _acp_handler,
+    _acp_poll_handler,
     _capabilities_handler,
     _exec_batch_handler,
     _exec_handler,
@@ -69,6 +71,7 @@ def register(ctx: Any) -> None:
 
     try:
         from .tools import _load_config as _lc
+
         config, source = _lc()
         agents = config.get("agents", {})
         names = ", ".join(agents.keys()) if agents else "(none)"
@@ -80,6 +83,7 @@ def register(ctx: Any) -> None:
         ("windows_health", "windows", WINDOWS_HEALTH_SCHEMA, _health_handler),
         ("windows_capabilities", "windows", WINDOWS_CAPABILITIES_SCHEMA, _capabilities_handler),
         ("windows_acp", "windows", WINDOWS_ACP_SCHEMA, _acp_handler),
+        ("windows_acp_poll", "windows", WINDOWS_ACP_POLL_SCHEMA, _acp_poll_handler),
         ("windows_exec", "windows", WINDOWS_EXEC_SCHEMA, _exec_handler),
         ("windows_exec_batch", "windows", WINDOWS_EXEC_BATCH_SCHEMA, _exec_batch_handler),
         ("windows_file_read", "windows", WINDOWS_FILE_READ_SCHEMA, _file_read_handler),
@@ -87,20 +91,13 @@ def register(ctx: Any) -> None:
         ("windows_file_delete", "windows", WINDOWS_FILE_DELETE_SCHEMA, _file_delete_handler),
         ("windows_mouse_move", "windows", WINDOWS_MOUSE_MOVE_SCHEMA, _mouse_move_handler),
         ("windows_mouse_click", "windows", WINDOWS_MOUSE_CLICK_SCHEMA, _mouse_click_handler),
-        ("windows_mouse_doubleclick", "windows",
-         WINDOWS_MOUSE_DOUBLECLICK_SCHEMA, _mouse_doubleclick_handler),
-        ("windows_mouse_scroll", "windows",
-         WINDOWS_MOUSE_SCROLL_SCHEMA, _mouse_scroll_handler),
-        ("windows_mouse_position", "windows",
-         WINDOWS_MOUSE_POSITION_SCHEMA, _mouse_position_handler),
-        ("windows_open_app", "windows",
-         WINDOWS_OPEN_APP_SCHEMA, _open_app_handler),
-        ("windows_keyboard_type", "windows",
-         WINDOWS_KEYBOARD_TYPE_SCHEMA, _keyboard_type_handler),
-        ("windows_keyboard_press", "windows",
-         WINDOWS_KEYBOARD_PRESS_SCHEMA, _keyboard_press_handler),
-        ("windows_keyboard_hotkey", "windows",
-         WINDOWS_KEYBOARD_HOTKEY_SCHEMA, _keyboard_hotkey_handler),
+        ("windows_mouse_doubleclick", "windows", WINDOWS_MOUSE_DOUBLECLICK_SCHEMA, _mouse_doubleclick_handler),
+        ("windows_mouse_scroll", "windows", WINDOWS_MOUSE_SCROLL_SCHEMA, _mouse_scroll_handler),
+        ("windows_mouse_position", "windows", WINDOWS_MOUSE_POSITION_SCHEMA, _mouse_position_handler),
+        ("windows_open_app", "windows", WINDOWS_OPEN_APP_SCHEMA, _open_app_handler),
+        ("windows_keyboard_type", "windows", WINDOWS_KEYBOARD_TYPE_SCHEMA, _keyboard_type_handler),
+        ("windows_keyboard_press", "windows", WINDOWS_KEYBOARD_PRESS_SCHEMA, _keyboard_press_handler),
+        ("windows_keyboard_hotkey", "windows", WINDOWS_KEYBOARD_HOTKEY_SCHEMA, _keyboard_hotkey_handler),
         ("windows_window_focus", "windows", WINDOWS_WINDOW_FOCUS_SCHEMA, _window_focus_handler),
         ("windows_window_active", "windows", WINDOWS_WINDOW_ACTIVE_SCHEMA, _window_active_handler),
         ("windows_window_list", "windows", WINDOWS_WINDOW_LIST_SCHEMA, _window_list_handler),

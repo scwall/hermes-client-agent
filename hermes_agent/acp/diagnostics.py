@@ -10,6 +10,8 @@ from pathlib import Path
 
 import httpx
 
+from hermes_agent.acp.models import AcpTask
+
 _log = logging.getLogger("hermes-agent")
 
 AGENT_CONFIG_PATHS = {
@@ -271,6 +273,7 @@ def run_diagnostics(agent_type="opencode"):
         "functional_test": ft,
         "sessions": sessions,
         "sessions_active": len(sessions),
+        "async_tasks_running": AcpTask.count_running(),
         "issues": issues,
         "healthy": len(issues) == 0,
         "checked_at": datetime.now(timezone.utc).isoformat(),
