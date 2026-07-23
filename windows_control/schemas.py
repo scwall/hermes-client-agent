@@ -305,6 +305,36 @@ WINDOWS_SYSTEM_SCHEMA = _s(
     {},
 )
 
+WINDOWS_ACP_SCHEMA = _s(
+    "windows_acp",
+    "Relay a task to an ACP-compatible AI coding agent (OpenCode, Claude Code, Junie, etc.) "
+    "running on the remote machine. The agent_url points to the ACP agent's HTTP endpoint.",
+    {
+        "agent_url": {
+            "type": "string",
+            "description": "Base URL of the ACP agent (e.g. 'http://localhost:4096' for OpenCode).",
+        },
+        "prompt": {
+            "type": "string",
+            "description": "The task prompt to send to the ACP agent.",
+        },
+        "context": {
+            "type": "string",
+            "description": "Optional additional context for the task.",
+        },
+        "model": {
+            "type": "string",
+            "description": "Optional model ID to use (agent-specific).",
+        },
+        "timeout": {
+            "type": "integer",
+            "description": "Max wait time in seconds (default: 300).",
+            "default": 300,
+        },
+    },
+    ["agent_url", "prompt"],
+)
+
 WINDOWS_OPEN_APP_SCHEMA = _s(
     "windows_open_app",
     "Launch an application on the remote PC and optionally bring its window to front.",

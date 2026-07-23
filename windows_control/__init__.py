@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from .schemas import (
+    WINDOWS_ACP_SCHEMA,
     WINDOWS_CAPABILITIES_SCHEMA,
     WINDOWS_EXEC_BATCH_SCHEMA,
     WINDOWS_EXEC_SCHEMA,
@@ -34,6 +35,7 @@ from .schemas import (
     WINDOWS_WINDOW_LIST_SCHEMA,
 )
 from .tools import (
+    _acp_handler,
     _capabilities_handler,
     _exec_batch_handler,
     _exec_handler,
@@ -77,6 +79,7 @@ def register(ctx: Any) -> None:
     tools: list[tuple[str, str, dict[str, Any], Any]] = [
         ("windows_health", "windows", WINDOWS_HEALTH_SCHEMA, _health_handler),
         ("windows_capabilities", "windows", WINDOWS_CAPABILITIES_SCHEMA, _capabilities_handler),
+        ("windows_acp", "windows", WINDOWS_ACP_SCHEMA, _acp_handler),
         ("windows_exec", "windows", WINDOWS_EXEC_SCHEMA, _exec_handler),
         ("windows_exec_batch", "windows", WINDOWS_EXEC_BATCH_SCHEMA, _exec_batch_handler),
         ("windows_file_read", "windows", WINDOWS_FILE_READ_SCHEMA, _file_read_handler),

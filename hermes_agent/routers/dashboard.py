@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
+from hermes_agent.acp.diagnostics import run_diagnostics
 from hermes_agent.audit.models import AuditLog
 from hermes_agent.security import verify_local_or_token
 
@@ -158,3 +159,24 @@ async def dashboard_exec_page(
         "endpoint_filter": "/exec",
         "search_query": search or "",
     }, data)
+
+
+@router.get("/dashboard/acp", response_class=HTMLResponse, include_in_schema=False, summary="ACP agent diagnostics page")
+async def dashboard_acp_page(request: Request):
+    """Serve the ACP diagnostics dashboard page."""
+    extra = {
+        "active_page": "acp",
+        "acp": run_diagnostics(),
+    }
+    stats = AuditLog.fetch_stats()
+    ctx = {
+        "request": request,
+        "stats": stats,
+        "endpoints": DEFAULT_ENDPOINTS,
+        "entries": [],
+        "total": 0,
+        "offset": 0,
+        "limit": 50,
+    }
+    ctx.update(extra)
+    return _templates.TemplateResponse(request, "pages/acp.html", ctx)

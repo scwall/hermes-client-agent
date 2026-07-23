@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Hermes Agent &mdash; ACP{% endblock %}
+{% block content %}
+<h1>ACP Agent Status</h1>
+
+<div id="stats-bar">
+  <div class="stat-card">
+    <div class="value" id="acp-binary-status">{{ acp.binary.installed and 'Online' or 'Offline' }}</div>
+    <div class="label">Agent Binary</div>
+  </div>
+  <div class="stat-card">
+    <div class="value" id="acp-version">{{ acp.binary.version or 'N/A' }}</div>
+    <div class="label">Version</div>
+  </div>
+  <div class="stat-card">
+    <div class="value" id="acp-sessions-count">{{ acp.sessions_active }}</div>
+    <div class="label">Active Sessions</div>
+  </div>
+  <div class="stat-card">
+    <div class="value" id="acp-functional-test" style="color:{% if acp.functional_test.status == 'ok' %}#3fb950{% elif acp.functional_test.status == 'failed' %}#f85149{% else %}#8b949e{% endif %}">
+      {{ acp.functional_test.status | upper if acp.functional_test.status else 'N/A' }}
+    </div>
+    <div class="label">Functional Test</div>
+  </div>
+</div>
+
+{% if acp.issues %}
+<div style="background:#3a1a1a;border:1px solid #da3633;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+  <strong style="color:#f85149">Issues Detected:</strong>
+  <ul style="margin:8px 0 0 20px;color:#c9d1d9;font-size:12px">
+    {% for issue in acp.issues %}
+    <li>{{ issue }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2 style="font-size:16px;color:#8b949e;margin:16px 0 8px">Active Sessions</h2>
+{% if acp.sessions %}
+<div id="table-wrapper">
+  <table>
+    <thead>
+      <tr>
+        <th>Session ID</th>
+        <th>Port</th>
+        <th>PID</th>
+        <th>Agent</th>
+        <th>Exchanges</th>
+        <th>Created</th>
+        <th>Heartbeat</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in acp.sessions %}
+      <tr>
+        <td>{{ s.session_id }}</td>
+        <td><span class="badge ok">{{ s.port }}</span></td>
+        <td>{{ s.pid or '-' }}</td>
+        <td>{{ s.agent_type }}</td>
+        <td>{{ s.exchange_count }}</td>
+        <td>{{ s.created_at[:19] if s.created_at else '-' }}</td>
+        <td>{{ s.last_heartbeat[:19] if s.last_heartbeat else '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p style="color:#8b949e;font-size:13px;padding:16px 0">No active sessions</p>
+{% endif %}
+
+<h2 style="font-size:16px;color:#8b949e;margin:20px 0 8px">Configuration</h2>
+<table style="margin-bottom:24px">
+  <tbody>
+    <tr>
+      <td style="color:#8b949e;width:140px">Binary path</td>
+      <td>{{ acp.binary.path or 'Not found' }}</td>
+    </tr>
+    <tr>
+      <td style="color:#8b949e">Config file</td>
+      <td>{{ acp.config.config_file or 'Not found' }}</td>
+    </tr>
+    <tr>
+      <td style="color:#8b949e">Default model</td>
+      <td>{{ acp.config.default_model or 'Not set' }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<script>
+(function() {
+  setInterval(function() {
+    fetch('/acp/diagnostics')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        document.getElementById('acp-sessions-count').textContent = d.sessions_active;
+        document.getElementById('acp-binary-status').textContent = d.binary.installed ? 'Online' : 'Offline';
+        if (d.binary.version) document.getElementById('acp-version').textContent = d.binary.version;
+        var ft = d.functional_test || {};
+        var el = document.getElementById('acp-functional-test');
+        el.textContent = (ft.status || 'N/A').toUpperCase();
+        el.style.color = ft.status === 'ok' ? '#3fb950' : ft.status === 'failed' ? '#f85149' : '#8b949e';
+      })
+      .catch(function() {});
+  }, 10000);
+})();
+</script>
+{% endblock %}

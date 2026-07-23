@@ -299,6 +299,21 @@ def _system_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request("GET", "/system", agent=args.get("agent"))
 
 
+def _acp_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    return _make_request(
+        "POST", "/acp",
+        json_data={
+            "agent_url": str(args["agent_url"]),
+            "prompt": str(args["prompt"]),
+            "context": str(args.get("context", "")) if args.get("context") else "",
+            "model": str(args.get("model", "")) if args.get("model") else "",
+            "timeout": int(args.get("timeout", 300)),
+        },
+        timeout=int(args.get("timeout", 300)) + 10,
+        agent=args.get("agent"),
+    )
+
+
 def _open_app_handler(args: dict[str, Any], **kwargs: Any) -> str:
     executable = str(args.get("executable", ""))
     arguments = str(args.get("arguments", ""))
