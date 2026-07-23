@@ -1,4 +1,5 @@
 """Tests for ACP diagnostics endpoint and dashboard."""
+
 import json
 import os
 import tempfile
@@ -49,6 +50,7 @@ class TestParseJsonc:
 
     def test_parse_invalid_json_raises(self):
         import pytest
+
         with pytest.raises(json.JSONDecodeError):
             parse_jsonc("{invalid}")
 
@@ -100,6 +102,7 @@ class TestInspectConfig:
             }""")
             f.flush()
             from pathlib import Path
+
             with mock.patch("hermes_agent.acp.diagnostics.find_config_file", return_value=Path(f.name)):
                 result = inspect_config("opencode")
             os.unlink(f.name)
@@ -111,6 +114,7 @@ class TestInspectConfig:
             f.write("{invalid json content!!!")
             f.flush()
             from pathlib import Path
+
             with mock.patch("hermes_agent.acp.diagnostics.find_config_file", return_value=Path(f.name)):
                 result = inspect_config("opencode")
             os.unlink(f.name)
@@ -197,3 +201,72 @@ class TestDashboardAcpPage:
         resp = client.get("/dashboard/acp")
         assert resp.status_code == 200
         assert "No active sessions" in resp.text or "Active Sessions" in resp.text
+
+
+class TestInspectModels:
+    """Tests for inspect_models() API-driven model discovery."""
+
+    def test_parses_providers_and_models(self):
+        from hermes_agent.acp.diagnostics import inspect_models
+
+        mock_config = {"enabled_providers": ["deepseek", "openrouter"], "model": "deepseek/deepseek-v4-pro"}
+
+        mock_proc = mock.MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = (
+            "deepseek/deepseek-chat\n"
+            '{\n  "id": "deepseek-chat",\n  "providerID": "deepseek",\n  "name": "DeepSeek Chat",\n'
+            '  "family": "deepseek",\n  "status": "active",\n'
+            '  "limit": {"context": 1000000, "output": 384000}\n}\n'
+            "deepseek/deepseek-reasoner\n"
+            '{\n  "id": "deepseek-reasoner",\n  "providerID": "deepseek",\n  "name": "DeepSeek Reasoner",\n'
+            '  "family": "deepseek-thinking",\n  "status": "active",\n'
+            '  "limit": {"context": 1000000, "output": 384000}\n}\n'
+        )
+        mock_proc.stderr = ""
+
+        with mock.patch("hermes_agent.acp.diagnostics.httpx.get") as mock_get:
+            mock_resp = mock.MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = mock_config
+            mock_get.return_value = mock_resp
+
+            with mock.patch("hermes_agent.acp.diagnostics.subprocess.run", return_value=mock_proc):
+                result = inspect_models("http://localhost:4444")
+
+        assert len(result["models"]) == 2
+        assert len(result["providers"]) == 2
+        assert result["default"] == {"model": "deepseek/deepseek-v4-pro"}
+        model_ids = [m["id"] for m in result["models"]]
+        assert "deepseek-chat" in model_ids
+        assert "deepseek-reasoner" in model_ids
+
+    def test_connection_error(self):
+        from hermes_agent.acp.diagnostics import inspect_models
+
+        with mock.patch("hermes_agent.acp.diagnostics.httpx.get", side_effect=Exception("refused")):
+            result = inspect_models("http://localhost:19999")
+
+        assert len(result["models"]) == 0
+        assert "error" in result
+
+    def test_no_providers_in_config(self):
+        from hermes_agent.acp.diagnostics import inspect_models
+
+        mock_config = {"model": ""}
+        mock_proc = mock.MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = ""
+        mock_proc.stderr = ""
+
+        with mock.patch("hermes_agent.acp.diagnostics.httpx.get") as mock_get:
+            mock_resp = mock.MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = mock_config
+            mock_get.return_value = mock_resp
+
+            with mock.patch("hermes_agent.acp.diagnostics.subprocess.run", return_value=mock_proc):
+                result = inspect_models("http://localhost:4444")
+
+        assert result["models"] == []
+        assert result["providers"] == []

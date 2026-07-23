@@ -18,6 +18,39 @@ _log = logging.getLogger("hermes-agent")
 
 DEFAULT_TIMEOUT = 300
 
+PROVIDER_MAP = {
+    "deepseek": "deepseek",
+    "deepseek-chat": "deepseek",
+    "deepseek-coder": "deepseek",
+    "deepseek-reasoner": "deepseek",
+    "deepseek-v4": "deepseek",
+    "claude": "anthropic",
+    "claude-sonnet": "anthropic",
+    "claude-opus": "anthropic",
+    "claude-sonnet-4": "anthropic",
+    "claude-opus-4": "anthropic",
+    "gpt-4o": "openai",
+    "gpt-4o-mini": "openai",
+    "gpt-5": "openai",
+    "gpt-5.1": "openai",
+    "gpt-5.2": "openai",
+    "gpt-5.5": "openai",
+    "gpt-5.6": "openai",
+    "gemini": "google",
+    "gemini-pro": "google",
+    "gemini-flash": "google",
+}
+
+
+def _infer_provider(model_id: str) -> str:
+    if not model_id:
+        return ""
+    model_lower = model_id.lower()
+    for key, provider in PROVIDER_MAP.items():
+        if key in model_lower:
+            return provider
+    return ""
+
 
 class AcpRequest(BaseModel):
     agent_url: str = Field(..., description="Base URL of the ACP agent (e.g. http://localhost:4096)")
@@ -83,7 +116,7 @@ async def _relay_to_opencode(agent_url: str, payload: dict, timeout: int, acp_se
 
         message_body: dict = {"parts": [{"type": "text", "text": text}]}
         if model_id:
-            message_body["model"] = {"providerID": "", "modelID": model_id}
+            message_body["model"] = {"providerID": _infer_provider(model_id), "modelID": model_id}
         headers = {"x-opencode-directory": opencode_dir}
 
         try:

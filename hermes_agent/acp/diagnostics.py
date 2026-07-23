@@ -1,4 +1,5 @@
 """ACP diagnostics — inspect agent config, binary, and run functional test."""
+
 import json
 import logging
 import re
@@ -139,6 +140,74 @@ def inspect_config(agent_type):
     }
 
 
+def inspect_models(agent_url):
+    result = {"models": [], "providers": [], "default": {}, "error": None}
+
+    try:
+        resp = httpx.get(f"{agent_url.rstrip('/')}/config", timeout=5)
+        resp.raise_for_status()
+        config_data = resp.json()
+    except Exception as exc:
+        result["error"] = f"Cannot fetch config from agent: {exc}"
+        return result
+
+    enabled = config_data.get("enabled_providers", [])
+    if isinstance(enabled, list):
+        for p in enabled:
+            result["providers"].append({"id": p, "name": p})
+
+    model_config = config_data.get("model", "")
+    if model_config:
+        result["default"] = {"model": model_config}
+
+    try:
+        proc = subprocess.run(
+            ["opencode", "models", "--verbose"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0:
+            lines = proc.stdout.strip().split("\n")
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
+                if line and line != "{" and not line.startswith("{") and not line.startswith("}"):
+                    parts = line.split("/")
+                    provider_candidate = parts[0] if len(parts) > 0 else ""
+                    i += 1
+                    json_lines = []
+                    brace_count = 0
+                    while i < len(lines):
+                        current = lines[i].rstrip()
+                        json_lines.append(current)
+                        brace_count += current.count("{") - current.count("}")
+                        if current.strip() == "}" and brace_count == 0:
+                            i += 1
+                            break
+                        i += 1
+                    try:
+                        model_data = json.loads("\n".join(json_lines))
+                        result["models"].append(
+                            {
+                                "id": model_data.get("id", ""),
+                                "name": model_data.get("name", ""),
+                                "providerID": model_data.get("providerID", provider_candidate),
+                                "family": model_data.get("family", ""),
+                                "status": model_data.get("status", ""),
+                                "limit_context": (model_data.get("limit") or {}).get("context"),
+                            }
+                        )
+                    except json.JSONDecodeError:
+                        pass
+                else:
+                    i += 1
+    except Exception:
+        pass
+
+    return result
+
+
 def functional_test(agent_url):
     try:
         resp = httpx.post(
@@ -179,13 +248,18 @@ def run_diagnostics(agent_type="opencode"):
     if config.get("error"):
         issues.append(config["error"])
 
+    models_info = {"models": [], "providers": [], "default": None, "error": "No agent URL available"}
     ft = {"status": "skipped", "detail": "No agent URL available"}
     from hermes_agent.acp import get_session_manager
+
     mgr = get_session_manager()
     sessions = mgr.list_sessions()
     if sessions:
         s = sessions[0]
-        ft = functional_test(f"http://127.0.0.1:{s['port']}")
+        port = s["port"]
+        agent_url = f"http://127.0.0.1:{port}"
+        models_info = inspect_models(agent_url)
+        ft = functional_test(agent_url)
         if ft["status"] == "failed":
             issues.append(f"Functional test failed: {ft['detail']}")
 
@@ -193,6 +267,7 @@ def run_diagnostics(agent_type="opencode"):
         "agent_type": agent_type,
         "binary": binary,
         "config": config,
+        "models": models_info,
         "functional_test": ft,
         "sessions": sessions,
         "sessions_active": len(sessions),

@@ -103,7 +103,7 @@ class TestAcpEndpoint:
         assert data["success"] is True
 
         call_bodies = [c[1]["json"] for c in instance.post.call_args_list]
-        assert call_bodies[-1]["model"] == {"providerID": "", "modelID": "gpt-5"}
+        assert call_bodies[-1]["model"] == {"providerID": "openai", "modelID": "gpt-5"}
         assert "Context: python project" in call_bodies[-1]["parts"][0]["text"]
 
     def test_acp_agent_error_status_returns_502(self):
@@ -147,3 +147,39 @@ class TestAcpEndpoint:
         data = resp.json()
         assert data["success"] is True
         assert data["response"] == {"raw": "plain text response"}
+
+
+class TestProviderInference:
+    """Tests for _infer_provider() provider ID resolution."""
+
+    def test_empty_model(self):
+        from hermes_agent.routers.acp import _infer_provider
+
+        assert _infer_provider("") == ""
+
+    def test_deepseek_models(self):
+        from hermes_agent.routers.acp import _infer_provider
+
+        assert _infer_provider("deepseek-chat") == "deepseek"
+        assert _infer_provider("deepseek-coder") == "deepseek"
+        assert _infer_provider("deepseek-reasoner") == "deepseek"
+        assert _infer_provider("deepseek-v4-pro") == "deepseek"
+        assert _infer_provider("deepseek-v4-flash") == "deepseek"
+
+    def test_anthropic_models(self):
+        from hermes_agent.routers.acp import _infer_provider
+
+        assert _infer_provider("claude-sonnet-4") == "anthropic"
+        assert _infer_provider("claude-opus-4") == "anthropic"
+
+    def test_openai_models(self):
+        from hermes_agent.routers.acp import _infer_provider
+
+        assert _infer_provider("gpt-4o") == "openai"
+        assert _infer_provider("gpt-4o-mini") == "openai"
+        assert _infer_provider("gpt-5.1") == "openai"
+
+    def test_unknown_model(self):
+        from hermes_agent.routers.acp import _infer_provider
+
+        assert _infer_provider("unknown-model") == ""
