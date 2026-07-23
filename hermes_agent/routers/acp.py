@@ -1,6 +1,8 @@
 """ACP bridge — relay tasks to any ACP-compatible agent via HTTP, with session management."""
+
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from hermes_agent.acp import get_session_manager
 from hermes_agent.acp.diagnostics import run_diagnostics
+from hermes_agent.acp.models import AcpSession
 from hermes_agent.security import verify_token
 
 router = APIRouter(tags=["acp"], dependencies=[Depends(verify_token)])
@@ -43,21 +46,71 @@ class AcpSessionItem(BaseModel):
     exchange_count: int
 
 
-async def _relay_to_agent(agent_url: str, payload: dict, timeout: int):
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-            resp = await client.post(agent_url, json=payload)
-            if resp.status_code >= 400:
-                raise HTTPException(status_code=502, detail=f"ACP agent returned HTTP {resp.status_code}: {resp.text[:500]}")
+async def _relay_to_opencode(agent_url: str, payload: dict, timeout: int, acp_session=None):
+    base = agent_url.rstrip("/")
+    opencode_sid = acp_session.opencode_session_id if acp_session else None
+    opencode_dir = acp_session.opencode_directory if acp_session else None
+    hermes_session_id = acp_session.session_id if acp_session else None
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
+        if not opencode_sid:
             try:
-                data = resp.json()
-            except ValueError:
-                data = {"raw": resp.text[:10000]}
-            return {"success": True, "agent_url": agent_url, "response": data}
-    except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail=f"Cannot connect to ACP agent at {agent_url}")
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail=f"ACP agent at {agent_url} timed out after {timeout}s")
+                r = await client.post(f"{base}/session", json={})
+                r.raise_for_status()
+            except httpx.ConnectError:
+                raise HTTPException(status_code=503, detail=f"Cannot connect to ACP agent at {agent_url}")
+            except httpx.TimeoutException:
+                raise HTTPException(status_code=504, detail=f"ACP agent at {agent_url} timed out after {timeout}s")
+            except httpx.HTTPStatusError as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"ACP agent returned HTTP {exc.response.status_code} on session creation: {exc.response.text[:500]}",
+                )
+            try:
+                data = r.json()
+                opencode_sid = data["id"]
+                opencode_dir = data.get("directory", "/")
+            except (KeyError, ValueError):
+                raise HTTPException(status_code=502, detail="Invalid response from ACP agent on session creation")
+
+            if hermes_session_id:
+                AcpSession.update_opencode_session(hermes_session_id, opencode_sid, opencode_dir)
+
+        model_id = payload.get("model", "")
+        text = payload["prompt"]
+        if payload.get("context"):
+            text = f"Context: {payload['context']}\n\n{text}"
+
+        message_body: dict = {"parts": [{"type": "text", "text": text}]}
+        if model_id:
+            message_body["model"] = {"providerID": "", "modelID": model_id}
+        headers = {"x-opencode-directory": opencode_dir}
+
+        try:
+            r = await client.post(
+                f"{base}/session/{opencode_sid}/message",
+                json=message_body,
+                headers=headers,
+            )
+        except httpx.ConnectError:
+            raise HTTPException(status_code=503, detail=f"Cannot connect to ACP agent at {agent_url}")
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail=f"ACP agent at {agent_url} timed out after {timeout}s")
+
+        if r.status_code == 404:
+            if hermes_session_id:
+                AcpSession.update_opencode_session(hermes_session_id, None, None)
+            return await _relay_to_opencode(agent_url, payload, timeout, acp_session)
+
+        if r.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"ACP agent returned HTTP {r.status_code}: {r.text[:500]}")
+
+        try:
+            data = r.json()
+        except ValueError:
+            data = {"raw": r.text[:10000]}
+
+        return {"success": True, "agent_url": agent_url, "response": data}
 
 
 @router.post("/acp", summary="Relay a task to an ACP-compatible agent")
@@ -71,23 +124,25 @@ async def acp_relay(body: AcpRequest):
 
     _log.info("ACP relay to %s: prompt=%r timeout=%s", agent_url, body.prompt[:120], body.timeout)
 
-    mgr = get_session_manager()
-    session_id = None
+    acp_session = None
     if "127.0.0.1" in agent_url or "localhost" in agent_url:
-        session_id = mgr.get_or_create_for_localhost(agent_url)
-        if session_id:
-            _log.info("Using ACP session %s for %s", session_id, agent_url)
+        parsed = urlparse(agent_url)
+        port = parsed.port or 4444
+        acp_session = AcpSession.get_active_on_port(port)
+        if acp_session:
+            _log.info("Using ACP session %s for %s", acp_session.session_id, agent_url)
 
     try:
-        result = await _relay_to_agent(agent_url, payload, body.timeout)
+        result = await _relay_to_opencode(agent_url, payload, body.timeout, acp_session)
     except HTTPException:
         raise
     except Exception as exc:
         _log.exception("ACP relay failed")
         raise HTTPException(status_code=502, detail=f"ACP relay error: {exc}")
 
-    if session_id:
-        result["session_id"] = session_id
+    if acp_session:
+        result["session_id"] = acp_session.session_id
+        AcpSession.increment_exchange(acp_session.session_id)
 
     return result
 

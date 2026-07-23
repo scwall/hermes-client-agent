@@ -1,4 +1,5 @@
 """Peewee model for ACP agent sessions."""
+
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -20,6 +21,8 @@ class AcpSession(Model):
     last_heartbeat = CharField(max_length=30, null=True)
     exchange_count = IntegerField(default=0)
     stopped_at = CharField(max_length=30, null=True)
+    opencode_session_id = CharField(max_length=64, null=True)
+    opencode_directory = CharField(max_length=512, null=True)
 
     class Meta:
         table_name = "acp_sessions"
@@ -31,6 +34,7 @@ class AcpSession(Model):
         cls._meta.database = SqliteDatabase(str(path), pragmas={"journal_mode": "wal", "foreign_keys": "on"})
         cls._meta.database.connect()
         cls._meta.database.create_tables([cls], safe=True)
+        cls._migrate_schema()
 
     @classmethod
     def close_db(cls):
@@ -110,13 +114,29 @@ class AcpSession(Model):
         cls._ensure_db()
         if not zombie_pids:
             return 0
-        return (
-            cls.update(status="stopped", stopped_at=datetime.now(timezone.utc).isoformat(), pid=None)
-            .where(cls.pid.in_(zombie_pids))
-            .execute()
-        )
+        return cls.update(status="stopped", stopped_at=datetime.now(timezone.utc).isoformat(), pid=None).where(cls.pid.in_(zombie_pids)).execute()
 
     @classmethod
     def count_active(cls):
         cls._ensure_db()
         return cls.select().where(cls.status == "active").count()
+
+    @classmethod
+    def _migrate_schema(cls):
+        try:
+            cls._meta.database.execute_sql("ALTER TABLE acp_sessions ADD COLUMN opencode_session_id TEXT")
+        except Exception:
+            pass
+        try:
+            cls._meta.database.execute_sql("ALTER TABLE acp_sessions ADD COLUMN opencode_directory TEXT")
+        except Exception:
+            pass
+
+    @classmethod
+    def update_opencode_session(cls, hermes_session_id, opencode_session_id, opencode_directory):
+        cls._ensure_db()
+        row = cls.get_or_none(cls.session_id == hermes_session_id)
+        if row:
+            row.opencode_session_id = opencode_session_id
+            row.opencode_directory = opencode_directory
+            row.save()

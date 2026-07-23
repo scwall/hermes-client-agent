@@ -1,9 +1,9 @@
 """Tool schemas for the windows-control Hermes plugin."""
+
 from typing import Any
 
 
-def _s(name: str, desc: str, properties: dict[str, Any],
-       required: list[str] | None = None) -> dict[str, Any]:
+def _s(name: str, desc: str, properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
     """Build a Hermes-compliant tool schema (with optional agent parameter)."""
     props = dict(properties)
     props["agent"] = {
@@ -37,8 +37,7 @@ WINDOWS_CAPABILITIES_SCHEMA = _s(
 
 WINDOWS_EXEC_BATCH_SCHEMA = _s(
     "windows_exec_batch",
-    "Execute multiple commands sequentially on the remote PC. "
-    "Use this instead of multiple windows_exec calls to save tokens.",
+    "Execute multiple commands sequentially on the remote PC. Use this instead of multiple windows_exec calls to save tokens.",
     {
         "commands": {
             "type": "array",
@@ -255,8 +254,7 @@ WINDOWS_WINDOW_LIST_SCHEMA = _s(
 
 WINDOWS_SCREENSHOT_SCHEMA = _s(
     "windows_screenshot",
-    "Capture a screenshot of the remote PC's display. "
-    "Use scale=0.5 for a lighter thumbnail, quality=60 for good compression.",
+    "Capture a screenshot of the remote PC's display. Use scale=0.5 for a lighter thumbnail, quality=60 for good compression.",
     {
         "region": {
             "type": "string",
@@ -307,8 +305,7 @@ WINDOWS_SYSTEM_SCHEMA = _s(
 
 WINDOWS_ACP_SCHEMA = _s(
     "windows_acp",
-    "Relay a task to an ACP-compatible AI coding agent (OpenCode, Claude Code, Junie, etc.) "
-    "running on the remote machine. The agent_url points to the ACP agent's HTTP endpoint.",
+    "Relay a task to an ACP-compatible AI coding agent (OpenCode, Claude Code, Junie, etc.) running on the remote machine. The agent_url points to the ACP agent's HTTP endpoint.",
     {
         "agent_url": {
             "type": "string",

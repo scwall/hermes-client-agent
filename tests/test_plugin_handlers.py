@@ -1,11 +1,12 @@
 """Unit tests for the windows_control plugin config and all tool handlers."""
+
 import json
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 import windows_control.tools as tools
-
 
 # ── Config tests ─────────────────────────────────────────────────
 
@@ -86,14 +87,21 @@ class TestHandlers:
 
     def test_exec_cmd(self):
         with _mock_request('{"stdout":"hello","exit_code":0}') as mock:
-            r = json.loads(tools._exec_handler({"command": "echo hello", "shell": "cmd"}))
-            assert "chcp 65001" in mock.call_args[1]["json_data"]["command"]
+            tools._exec_handler({"command": "echo hello", "shell": "cmd"})
+            cmd = mock.call_args[1]["json_data"]["command"]
+            if sys.platform == "win32":
+                assert "chcp 65001" in cmd
+            else:
+                assert cmd == "echo hello"
 
     def test_exec_powershell(self):
         with _mock_request('{"stdout":"hello","exit_code":0}') as mock:
-            r = json.loads(tools._exec_handler({"command": "Write-Output hello", "shell": "powershell"}))
+            tools._exec_handler({"command": "Write-Output hello", "shell": "powershell"})
             cmd = mock.call_args[1]["json_data"]["command"]
-            assert "OutputEncoding" in cmd
+            if sys.platform == "win32":
+                assert "OutputEncoding" in cmd
+            else:
+                assert cmd == "Write-Output hello"
 
     def test_file_read(self):
         with _mock_request('{"path":"/f","content":"data"}'):
@@ -121,26 +129,26 @@ class TestHandlers:
             assert r == {"x": 100, "y": 200}
 
     def test_mouse_click(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._mouse_click_handler({"button": "right", "x": 42, "y": 99})
             data = mock.call_args[1]["json_data"]
             assert data["button"] == "right"
             assert data["x"] == 42
 
     def test_mouse_click_no_coords(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._mouse_click_handler({"button": "left"})
             data = mock.call_args[1]["json_data"]
             assert "x" not in data
 
     def test_mouse_doubleclick(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._mouse_doubleclick_handler({"x": 10, "y": 20})
             data = mock.call_args[1]["json_data"]
             assert data["x"] == 10
 
     def test_mouse_scroll(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._mouse_scroll_handler({"direction": "up", "clicks": 5})
             data = mock.call_args[1]["json_data"]
             assert data["clicks"] == 5
@@ -151,22 +159,22 @@ class TestHandlers:
             assert "x" in r
 
     def test_keyboard_type(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._keyboard_type_handler({"text": "hello"})
             assert mock.call_args[1]["json_data"]["text"] == "hello"
 
     def test_keyboard_type_double_wrap(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._keyboard_type_handler({"text": {"text": "world"}})
             assert mock.call_args[1]["json_data"]["text"] == "world"
 
     def test_keyboard_press(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._keyboard_press_handler({"key": "enter"})
             assert mock.call_args[1]["json_data"]["key"] == "enter"
 
     def test_keyboard_hotkey(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._keyboard_hotkey_handler({"keys": ["ctrl", "c"]})
             assert mock.call_args[1]["json_data"]["keys"] == ["ctrl", "c"]
 
@@ -191,7 +199,7 @@ class TestHandlers:
             assert r["format"] == "jpeg"
 
     def test_screenshot_with_params(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._screenshot_handler({"scale": 0.5, "quality": 60, "format": "jpeg"})
             params = mock.call_args[1]["params"]
             assert params["scale"] == 0.5
@@ -203,7 +211,7 @@ class TestHandlers:
             assert r[0]["name"] == "python"
 
     def test_process_kill(self):
-        with _mock_request('{}') as mock:
+        with _mock_request("{}") as mock:
             tools._process_kill_handler({"pid": 9999})
             assert mock.call_args[1]["json_data"]["pid"] == 9999
 

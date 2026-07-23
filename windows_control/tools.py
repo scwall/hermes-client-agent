@@ -1,9 +1,11 @@
 """Tool handlers, HTTP helper, and state management for the windows-control plugin."""
+
 from __future__ import annotations
 
 import json
 import logging
 import os
+import sys
 import time
 from typing import Any
 
@@ -28,6 +30,7 @@ def _load_config_from_ctx() -> dict[str, Any] | None:
     """Load windows_control section from Hermes config.yaml via hermes_cli.config."""
     try:
         from hermes_cli.config import load_config
+
         cfg = load_config()
         if isinstance(cfg, dict) and "windows_control" in cfg:
             return _clean_config(cfg["windows_control"])
@@ -48,10 +51,7 @@ def _load_config() -> tuple[dict[str, Any], str]:
     cfg = _load_config_from_ctx()
     if cfg:
         return cfg, "config.yaml"
-    msg = (
-        "No agents configured. Add a windows_control section to config.yaml. "
-        "Format: https://github.com/scwall/hermes-client-agent#hermes-plugin"
-    )
+    msg = "No agents configured. Add a windows_control section to config.yaml. Format: https://github.com/scwall/hermes-client-agent#hermes-plugin"
     raise RuntimeError(msg)
 
 
@@ -59,9 +59,7 @@ def _get_agent_config(config: dict[str, Any], agent: str | None = None) -> dict[
     """Resolve agent config by name, falling back to default_agent."""
     agents = config.get("agents", {})
     if not agents:
-        raise RuntimeError(
-            "No agents configured. Add a windows_control section to config.yaml or check state.json."
-        )
+        raise RuntimeError("No agents configured. Add a windows_control section to config.yaml or check state.json.")
     if agent and agent in agents:
         return agents[agent]
     default_name = config.get("default_agent") or next(iter(agents))
@@ -90,7 +88,7 @@ def _check_agent(agent_name: str, cfg: dict[str, Any]) -> bool:
         pass
     _agent_status[agent_name] = ok
     if not ok:
-        _log.warning("Agent '%s' unreachable at %s", agent_name, cfg['url'])
+        _log.warning("Agent '%s' unreachable at %s", agent_name, cfg["url"])
     return ok
 
 
@@ -114,10 +112,7 @@ def _make_request(
     headers = {"X-Agent-Token": cfg["token"]}
     _check_agent(agent_name, cfg)
     if _plugin_debug:
-        _log.debug("-> %s %s %s json=%s url=%s timeout=%ss",
-                   agent or "default", method, path,
-                   json.dumps(json_data, default=str)[:200] if json_data else "-",
-                   url, timeout or cfg.get("timeout", 15))
+        _log.debug("-> %s %s %s json=%s url=%s timeout=%ss", agent or "default", method, path, json.dumps(json_data, default=str)[:200] if json_data else "-", url, timeout or cfg.get("timeout", 15))
     try:
         resp = requests.request(
             method=method,
@@ -148,6 +143,7 @@ def _make_request(
 # Tool handlers (unchanged — they accept **kwargs which includes agent)
 # ---------------------------------------------------------------------------
 
+
 def _health_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request("GET", "/health", agent=args.get("agent"))
 
@@ -159,13 +155,15 @@ def _capabilities_handler(args: dict[str, Any], **kwargs: Any) -> str:
 def _exec_handler(args: dict[str, Any], **kwargs: Any) -> str:
     command = str(args.get("command", ""))
     shell = str(args.get("shell", "cmd"))
-    if shell.lower() in ("powershell", "ps"):
-        command = f"[Console]::OutputEncoding = [Text.Encoding]::UTF8; {command}"
-    else:
-        command = f"chcp 65001 > nul & {command}"
+    if sys.platform == "win32":
+        if shell.lower() in ("powershell", "ps"):
+            command = f"[Console]::OutputEncoding = [Text.Encoding]::UTF8; {command}"
+        else:
+            command = f"chcp 65001 > nul & {command}"
     timeout = int(args.get("timeout", 15))
     return _make_request(
-        "POST", "/exec",
+        "POST",
+        "/exec",
         json_data={"command": command, "shell": shell, "timeout": timeout},
         agent=args.get("agent"),
     )
@@ -174,7 +172,8 @@ def _exec_handler(args: dict[str, Any], **kwargs: Any) -> str:
 def _exec_batch_handler(args: dict[str, Any], **kwargs: Any) -> str:
     """POST /exec/batch — multiple commands sequentially."""
     return _make_request(
-        "POST", "/exec/batch",
+        "POST",
+        "/exec/batch",
         json_data={
             "commands": args["commands"],
             "stop_on_error": bool(args.get("stop_on_error", False)),
@@ -192,7 +191,8 @@ def _file_read_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _file_write_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request(
-        "PUT", "/file",
+        "PUT",
+        "/file",
         json_data={"path": args["path"], "content": args["content"]},
         agent=args.get("agent"),
     )
@@ -204,7 +204,8 @@ def _file_delete_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _mouse_move_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request(
-        "POST", "/mouse/move",
+        "POST",
+        "/mouse/move",
         json_data={"x": int(args["x"]), "y": int(args["y"])},
         agent=args.get("agent"),
     )
@@ -230,7 +231,8 @@ def _mouse_doubleclick_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _mouse_scroll_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request(
-        "POST", "/mouse/scroll",
+        "POST",
+        "/mouse/scroll",
         json_data={"direction": str(args.get("direction", "up")), "clicks": int(args.get("clicks", 3))},
         agent=args.get("agent"),
     )
@@ -248,20 +250,17 @@ def _keyboard_type_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 
 def _keyboard_press_handler(args: dict[str, Any], **kwargs: Any) -> str:
-    return _make_request(
-        "POST", "/keyboard/press", json_data={"key": str(args["key"])}, agent=args.get("agent")
-    )
+    return _make_request("POST", "/keyboard/press", json_data={"key": str(args["key"])}, agent=args.get("agent"))
 
 
 def _keyboard_hotkey_handler(args: dict[str, Any], **kwargs: Any) -> str:
-    return _make_request(
-        "POST", "/keyboard/hotkey", json_data={"keys": list(args["keys"])}, agent=args.get("agent")
-    )
+    return _make_request("POST", "/keyboard/hotkey", json_data={"keys": list(args["keys"])}, agent=args.get("agent"))
 
 
 def _window_focus_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request(
-        "POST", "/window/focus",
+        "POST",
+        "/window/focus",
         json_data={"title_substring": str(args["title_substring"])},
         agent=args.get("agent"),
     )
@@ -290,9 +289,7 @@ def _processes_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 
 def _process_kill_handler(args: dict[str, Any], **kwargs: Any) -> str:
-    return _make_request(
-        "POST", "/process/kill", json_data={"pid": int(args["pid"])}, agent=args.get("agent")
-    )
+    return _make_request("POST", "/process/kill", json_data={"pid": int(args["pid"])}, agent=args.get("agent"))
 
 
 def _system_handler(args: dict[str, Any], **kwargs: Any) -> str:
@@ -301,7 +298,8 @@ def _system_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _acp_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return _make_request(
-        "POST", "/acp",
+        "POST",
+        "/acp",
         json_data={
             "agent_url": str(args["agent_url"]),
             "prompt": str(args["prompt"]),
@@ -327,20 +325,26 @@ def _open_app_handler(args: dict[str, Any], **kwargs: Any) -> str:
     if arguments:
         cmd += f" {arguments}"
 
-    exec_result = json.loads(_make_request(
-        "POST", "/exec",
-        json_data={"command": cmd, "shell": "cmd", "timeout": 10},
-        agent=agent,
-    ))
+    exec_result = json.loads(
+        _make_request(
+            "POST",
+            "/exec",
+            json_data={"command": cmd, "shell": "cmd", "timeout": 10},
+            agent=agent,
+        )
+    )
 
     if wait_focus:
         time.sleep(1.5)
-        focus_result = json.loads(_make_request(
-            "POST", "/window/focus",
-            json_data={"title_substring": executable.rsplit(".", 1)[0]},
-            timeout=5,
-            agent=agent,
-        ))
+        focus_result = json.loads(
+            _make_request(
+                "POST",
+                "/window/focus",
+                json_data={"title_substring": executable.rsplit(".", 1)[0]},
+                timeout=5,
+                agent=agent,
+            )
+        )
         return json.dumps({"exec": exec_result, "focus": focus_result})
 
     return json.dumps({"exec": exec_result})

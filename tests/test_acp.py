@@ -1,4 +1,5 @@
 """Tests for the /acp ACP bridge endpoint."""
+
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -52,13 +53,17 @@ class TestAcpEndpoint:
         assert resp.status_code == 504
 
     def test_acp_success_response(self):
-        mock_response = mock.MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "bonjour"}
+        session_resp = mock.MagicMock()
+        session_resp.status_code = 200
+        session_resp.json.return_value = {"id": "ses_test", "directory": "/home/test"}
+
+        message_resp = mock.MagicMock()
+        message_resp.status_code = 200
+        message_resp.json.return_value = {"result": "bonjour"}
 
         with mock.patch("hermes_agent.routers.acp.httpx.AsyncClient") as mock_client:
             instance = mock_client.return_value.__aenter__.return_value
-            instance.post.return_value = mock_response
+            instance.post.side_effect = [session_resp, message_resp]
             resp = client.post(
                 "/acp",
                 json={"agent_url": "http://localhost:4096", "prompt": "hello"},
@@ -71,13 +76,17 @@ class TestAcpEndpoint:
         assert data["agent_url"] == "http://localhost:4096"
 
     def test_acp_with_context_and_model(self):
-        mock_response = mock.MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"text": "done"}
+        session_resp = mock.MagicMock()
+        session_resp.status_code = 200
+        session_resp.json.return_value = {"id": "ses_ctx", "directory": "/home/test"}
+
+        message_resp = mock.MagicMock()
+        message_resp.status_code = 200
+        message_resp.json.return_value = {"text": "done"}
 
         with mock.patch("hermes_agent.routers.acp.httpx.AsyncClient") as mock_client:
             instance = mock_client.return_value.__aenter__.return_value
-            instance.post.return_value = mock_response
+            instance.post.side_effect = [session_resp, message_resp]
             resp = client.post(
                 "/acp",
                 json={
@@ -93,14 +102,22 @@ class TestAcpEndpoint:
         data = resp.json()
         assert data["success"] is True
 
+        call_bodies = [c[1]["json"] for c in instance.post.call_args_list]
+        assert call_bodies[-1]["model"] == {"providerID": "", "modelID": "gpt-5"}
+        assert "Context: python project" in call_bodies[-1]["parts"][0]["text"]
+
     def test_acp_agent_error_status_returns_502(self):
-        mock_response = mock.MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
+        session_resp = mock.MagicMock()
+        session_resp.status_code = 200
+        session_resp.json.return_value = {"id": "ses_err", "directory": "/home/test"}
+
+        message_resp = mock.MagicMock()
+        message_resp.status_code = 500
+        message_resp.text = "Internal Server Error"
 
         with mock.patch("hermes_agent.routers.acp.httpx.AsyncClient") as mock_client:
             instance = mock_client.return_value.__aenter__.return_value
-            instance.post.return_value = mock_response
+            instance.post.side_effect = [session_resp, message_resp]
             resp = client.post(
                 "/acp",
                 json={"agent_url": "http://localhost:4096", "prompt": "hello"},
@@ -109,14 +126,18 @@ class TestAcpEndpoint:
         assert resp.status_code == 502
 
     def test_acp_non_json_response(self):
-        mock_response = mock.MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.side_effect = ValueError("not json")
-        mock_response.text = "plain text response"
+        session_resp = mock.MagicMock()
+        session_resp.status_code = 200
+        session_resp.json.return_value = {"id": "ses_raw", "directory": "/home/test"}
+
+        message_resp = mock.MagicMock()
+        message_resp.status_code = 200
+        message_resp.json.side_effect = ValueError("not json")
+        message_resp.text = "plain text response"
 
         with mock.patch("hermes_agent.routers.acp.httpx.AsyncClient") as mock_client:
             instance = mock_client.return_value.__aenter__.return_value
-            instance.post.return_value = mock_response
+            instance.post.side_effect = [session_resp, message_resp]
             resp = client.post(
                 "/acp",
                 json={"agent_url": "http://localhost:4096", "prompt": "hello"},
