@@ -78,10 +78,73 @@ Hermes runs wherever you want. Agents live on target machines. Communication goe
 | App launch | — | `windows_open_app` (launch + focus) |
 | Screenshot | `GET /screenshot` | `windows_screenshot` |
 | System | `GET /system`, `GET /processes`, `POST /process/kill` | `windows_system`, `windows_processes` |
+| **ACP Bridge** | `POST /acp`, `POST /acp/spawn`, `GET /acp/sessions`, `GET /acp/diagnostics` | `windows_acp` |
 | Dashboard | `GET /dashboard`, `GET /dashboard/{logs,errors,exec}` | — |
 | API logs | `GET /api/logs`, `GET /api/stats`, `GET /api/logs/export` | — |
 
 Mouse, keyboard, and window endpoints are optional — they depend on `pyautogui` and `pygetwindow`. The agent works without them.
+
+---
+
+## ACP Bridge
+
+The `/acp` bridge relays tasks to ACP-compatible AI coding agents (OpenCode, Claude Code, Junie) running on the same machine. It manages agent lifecycle, keeps sessions alive, and discovers available models.
+
+### Architecture
+
+```
+Hermes Agent                   OpenCode
+   │                              │
+   │  POST /acp/spawn             │
+   ├─────────────────────────────►│  opencode serve
+   │                              │  → HTTP server
+   │  POST /acp                   │
+   ├─────────────────────────────►│  1. POST /session
+   │                              │  2. POST /session/{id}/message
+   │                              │  → AI response
+   │◄─────────────────────────────┤
+```
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/acp` | Relay a prompt to an ACP agent (auto-creates session, infers provider, streams response) |
+| `POST` | `/acp/spawn` | Launch a new OpenCode server on a free port |
+| `GET` | `/acp/sessions` | List active ACP sessions (PID, port, status) |
+| `DELETE` | `/acp/sessions/{id}` | Stop an ACP session |
+| `GET` | `/acp/diagnostics` | Inspect agent binary, config, available models (344 discovered) |
+
+### Provider inference
+
+When the `model` field is specified (e.g. `deepseek-chat`), the bridge auto-infers the provider:
+
+| Model pattern | → providerID |
+|---|---|
+| `deepseek-*` | `deepseek` |
+| `claude-*` | `anthropic` |
+| `gpt-*` | `openai` |
+| `gemini-*` | `google` |
+
+### Examples
+
+```bash
+# Launch an OpenCode agent
+curl -X POST http://localhost:8765/acp/spawn \
+  -H "X-Agent-Token: YOUR_TOKEN"
+
+# Send a prompt (auto-creates session, infers provider)
+curl -X POST http://localhost:8765/acp \
+  -H "X-Agent-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_url":"http://localhost:4444","prompt":"explain this codebase","model":"deepseek-chat","timeout":120}'
+
+# List active sessions
+curl http://localhost:8765/acp/sessions -H "X-Agent-Token: YOUR_TOKEN"
+
+# Run diagnostics (models, binary, config)
+curl http://localhost:8765/acp/diagnostics -H "X-Agent-Token: YOUR_TOKEN"
+```
 
 ---
 
@@ -221,7 +284,7 @@ curl "http://agent:8765/api/logs/export?format=csv" -H "X-Agent-Token: YOUR_TOKE
 ## Development
 
 ```bash
-uv run pytest tests/ -v       # 135 tests
+uv run pytest tests/ -v       # 200 tests
 python scripts/build_exe.py   # → dist/hermes-agent.exe (23.5 MiB)
 uv run ruff check .           # lint
 uv run ruff format .          # format
@@ -245,6 +308,7 @@ Run the full endpoint test suite:
 - [x] Structured audit log (JSON Lines) with console output
 - [x] CSV/JSON log export
 - [x] PEP8 clean (ruff, line-length 360)
+- [x] ACP bridge — relay prompts to OpenCode/Claude Code/Junie, session management, model discovery
 - [ ] Native Linux agent (systemd, X11/Wayland screenshot, xdotool)
 - [ ] Native macOS agent (launchd, CoreGraphics screenshot)
 - [ ] Multi-agent dashboard (unified view of all agents)
