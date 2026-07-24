@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 
 try:
     import pystray
-except ImportError:
+except (ImportError, Exception):
     pystray = None  # type: ignore[assignment]
 
 try:
