@@ -11,7 +11,6 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from hermes_agent.acp import get_runtime_broker, get_task_service
-from hermes_agent.acp.models import AcpTask
 from hermes_agent.audit import AuditMiddleware, get_audit_logger
 from hermes_agent.config import PORT, TOKEN, log
 from hermes_agent.log_manager import RequestLoggingMiddleware, log_router, setup_log_capture
@@ -42,8 +41,10 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(broker.reconcile)
     svc = get_task_service()
     await asyncio.to_thread(svc.reconcile_stale_tasks)
-    log.info("ACP runtime broker ready")
+    heartbeat_task = asyncio.create_task(broker.start_heartbeat())
+    log.info("ACP runtime broker ready (heartbeat %ds)", 30)
     yield
+    heartbeat_task.cancel()
     get_audit_logger().close()
     log.info("Hermes Agent shutting down")
 

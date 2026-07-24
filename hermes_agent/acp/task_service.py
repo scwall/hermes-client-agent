@@ -44,7 +44,7 @@ class TaskService:
     async def _run_async(self, task_id, conversation_id, prompt, model, timeout, workspace):
         async with _async_semaphore:
             try:
-                result = await asyncio.wait_for(
+                await asyncio.wait_for(
                     asyncio.to_thread(self._execute_and_poll, task_id, conversation_id, prompt, model, timeout, workspace),
                     timeout=timeout + 10,
                 )
@@ -64,8 +64,6 @@ class TaskService:
             upstream_sid = store.get_upstream_session(conversation_id)
             runtime_id = store.get_runtime_id(conversation_id)
             if upstream_sid and runtime_id:
-                runtimes = broker._adapter  # we have adapter directly
-                # find endpoint from runtime_id
                 from hermes_agent.acp.models import AcpRuntime
 
                 runtime = AcpRuntime.get_or_none(AcpRuntime.runtime_id == runtime_id)

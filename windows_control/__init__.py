@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Any
 
 from .schemas import (
-    WINDOWS_ACP_POLL_SCHEMA,
     WINDOWS_ACP_SCHEMA,
     WINDOWS_CAPABILITIES_SCHEMA,
     WINDOWS_EXEC_BATCH_SCHEMA,
@@ -37,7 +36,6 @@ from .schemas import (
 )
 from .tools import (
     _acp_handler,
-    _acp_poll_handler,
     _capabilities_handler,
     _exec_batch_handler,
     _exec_handler,

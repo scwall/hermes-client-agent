@@ -1,7 +1,5 @@
 """ACP bridge — relay tasks to coding agents with runtime management."""
 
-import asyncio
-import json
 import logging
 from typing import Optional
 
@@ -10,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from hermes_agent.acp.diagnostics import run_diagnostics
 from hermes_agent.acp.models import AcpRuntime, AcpTask
-from hermes_agent.acp.runtime_broker import get_runtime_broker
 from hermes_agent.acp.task_service import get_task_service
 from hermes_agent.security import verify_token
 

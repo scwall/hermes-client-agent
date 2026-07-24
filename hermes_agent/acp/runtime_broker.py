@@ -1,5 +1,6 @@
 """Runtime broker — acquire, spawn, health-check OpenCode instances."""
 
+import asyncio
 import logging
 import os
 import signal
@@ -7,13 +8,14 @@ import socket
 import threading
 
 from hermes_agent.acp.adapter_opencode import OpenCodeAdapter
-from hermes_agent.acp.models import AcpRuntime
+from hermes_agent.acp.models import AcpRuntime, AcpTask
 
 _log = logging.getLogger("hermes-agent")
 
 DEFAULT_PORT = 4444
 MAX_MANAGED = 5
 HEALTH_TIMEOUT = 15
+HEARTBEAT_INTERVAL = 30
 
 
 def _is_port_available(port):
@@ -97,19 +99,31 @@ class RuntimeBroker:
     def cleanup_zombies(self):
         runtimes = AcpRuntime.get_ready_managed()
         for r in runtimes:
+            runtime_id = r["runtime_id"]
             endpoint = r["endpoint"]
+            pid = r.get("pid")
+
             if not self._adapter.health_check(endpoint):
-                _log.warning("Runtime %s on %s is stale — stopping", r["runtime_id"], endpoint)
-                pid = r.get("pid")
+                _log.warning("Runtime %s on %s is stale (health check failed) — stopping", runtime_id, endpoint)
                 if pid:
                     try:
                         os.kill(pid, signal.SIGTERM)
                     except OSError:
                         pass
-                AcpRuntime.mark_stopped(r["runtime_id"])
+                AcpRuntime.mark_stopped(runtime_id)
+                AcpTask.fail_tasks_for_runtime(runtime_id)
 
     def reconcile(self):
         self.cleanup_zombies()
+
+    async def start_heartbeat(self):
+        _log.info("ACP heartbeat started (interval=%ds)", HEARTBEAT_INTERVAL)
+        while True:
+            await asyncio.sleep(HEARTBEAT_INTERVAL)
+            try:
+                await asyncio.to_thread(self.cleanup_zombies)
+            except Exception:
+                _log.exception("Heartbeat error")
 
 
 _runtime_broker = None
