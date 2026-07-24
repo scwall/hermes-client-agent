@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import secrets
+from datetime import datetime, timezone
 
 import httpx
 
@@ -164,8 +165,18 @@ class TaskService:
             handle.cancel()
 
     def reconcile_stale_tasks(self):
+        now = datetime.now(timezone.utc)
         for t in AcpTask.get_running_tasks():
-            AcpTask.mark_failed(t["task_id"], "Agent restarted — task interrupted", "interrupted")
+            deadline_str = t.get("deadline")
+            if deadline_str:
+                try:
+                    deadline = datetime.fromisoformat(deadline_str)
+                    if deadline < now:
+                        AcpTask.mark_failed(t["task_id"], "Task timed out during restart", "task_timeout")
+                        continue
+                except (ValueError, TypeError):
+                    pass
+        AcpTask.cleanup_old(max_age_hours=24)
 
 
 _task_service = None
