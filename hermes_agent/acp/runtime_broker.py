@@ -99,8 +99,17 @@ class RuntimeBroker:
         for r in runtimes:
             endpoint = r["endpoint"]
             if not self._adapter.health_check(endpoint):
-                _log.warning("Runtime %s is stale (health check failed)", r["runtime_id"])
-                AcpRuntime.mark_stale(r["runtime_id"])
+                _log.warning("Runtime %s on %s is stale — stopping", r["runtime_id"], endpoint)
+                pid = r.get("pid")
+                if pid:
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                    except OSError:
+                        pass
+                AcpRuntime.mark_stopped(r["runtime_id"])
+
+    def reconcile(self):
+        self.cleanup_zombies()
 
 
 _runtime_broker = None

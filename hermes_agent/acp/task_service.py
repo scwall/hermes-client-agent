@@ -111,13 +111,14 @@ class TaskService:
         try:
             return adapter.send_message(endpoint, upstream_sid, prompt, model, timeout)
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code != 404:
+            if exc.response.status_code not in (404, 500):
                 raise
-            _log.info("OpenCode session %s expired (404) — recreating session", upstream_sid)
+            _log.info("OpenCode session %s invalid (HTTP %d) — recreating session", upstream_sid, exc.response.status_code)
             try:
                 session_data = adapter.create_session(endpoint)
                 upstream_sid = session_data["id"]
                 store.set_upstream_session(conversation_id, upstream_sid)
+                _log.info("Session recreated: %s", upstream_sid)
             except Exception:
                 _log.warning("Session creation failed on %s — acquiring new runtime", endpoint)
                 runtime = broker.acquire(conversation_id)
@@ -126,6 +127,7 @@ class TaskService:
                 session_data = adapter.create_session(endpoint)
                 upstream_sid = session_data["id"]
                 store.set_upstream_session(conversation_id, upstream_sid)
+                _log.info("New runtime %s, session %s", endpoint, upstream_sid)
             return adapter.send_message(endpoint, upstream_sid, prompt, model, timeout)
 
     def poll(self, task_id):

@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     log.info("Token: %s...%s", TOKEN[:6], TOKEN[-4:] if len(TOKEN) > 10 else "****")
     get_audit_logger()
     broker = get_runtime_broker()
-    await asyncio.to_thread(broker.cleanup_zombies)
+    await asyncio.to_thread(broker.reconcile)
     svc = get_task_service()
     await asyncio.to_thread(svc.reconcile_stale_tasks)
     log.info("ACP runtime broker ready")

@@ -87,26 +87,25 @@ class OpenCodeAdapter:
 
     def get_providers(self, endpoint: str) -> dict[str, str]:
         base = endpoint.rstrip("/")
+        providers: dict[str, str] = {}
 
         try:
-            resp = httpx.get(f"{base}/models", timeout=5)
+            resp = httpx.get(f"{base}/config/providers", timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
-                providers: dict[str, str] = {}
-                models_list = data if isinstance(data, list) else data.get("models", []) if isinstance(data, dict) else []
-                for m in models_list:
-                    if isinstance(m, dict):
-                        mid = m.get("id") or m.get("modelID") or ""
-                        pid = m.get("providerID") or m.get("provider") or ""
-                        if mid:
+                raw_providers = data.get("providers", []) if isinstance(data, dict) else []
+                for p in raw_providers:
+                    pid = p.get("id", "")
+                    provider_models = p.get("models", {}) if isinstance(p, dict) else {}
+                    if isinstance(provider_models, dict):
+                        for mid in provider_models:
                             providers[mid] = pid
                 if providers:
-                    _log.info("Discovered %d provider mappings from /models on %s", len(providers), base)
+                    _log.info("Discovered %d provider mappings from /config/providers on %s", len(providers), base)
                     return providers
         except Exception:
             pass
 
-        providers: dict[str, str] = {}
         try:
             resp = httpx.get(f"{base}/config", timeout=5)
             if resp.status_code == 200:
@@ -115,7 +114,7 @@ class OpenCodeAdapter:
                 if default_model and "/" in default_model:
                     provider, model_id = default_model.split("/", 1)
                     providers[model_id] = provider
-                    _log.info("Inferred provider mapping from /config: %s -> %s", model_id, provider)
+                    _log.info("Fallback: inferred %s -> %s from /config", model_id, provider)
         except Exception:
             pass
 
