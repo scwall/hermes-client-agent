@@ -43,6 +43,7 @@ class AcpRuntime(_BaseModel):
     managed = BooleanField(default=True)
     status = CharField(max_length=16, default="starting")
     version = CharField(max_length=32, null=True)
+    capabilities = CharField(max_length=4096, null=True)
     created_at = CharField(max_length=30)
     last_health_check = CharField(max_length=30, null=True)
 

@@ -1,41 +1,17 @@
 """OpenCode adapter implementation."""
 
+import json
 import logging
 import os
 import shutil
 import subprocess
 import time
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
 
 _log = logging.getLogger("hermes-agent")
-
-PROVIDER_MAP = {
-    "deepseek": "deepseek",
-    "deepseek-chat": "deepseek",
-    "deepseek-coder": "deepseek",
-    "deepseek-reasoner": "deepseek",
-    "deepseek-v4": "deepseek",
-    "claude": "anthropic",
-    "claude-sonnet": "anthropic",
-    "claude-opus": "anthropic",
-    "claude-sonnet-4": "anthropic",
-    "claude-opus-4": "anthropic",
-    "gpt-4o": "openai",
-    "gpt-4o-mini": "openai",
-    "gpt-5": "openai",
-    "gemini": "google",
-}
-
-
-def _infer_provider(model_id: str) -> str:
-    if not model_id:
-        return ""
-    for key, provider in PROVIDER_MAP.items():
-        if key in model_id.lower():
-            return provider
-    return ""
 
 
 class OpenCodeAdapter:
@@ -90,12 +66,72 @@ class OpenCodeAdapter:
         resp.raise_for_status()
         return resp.json()
 
+    def _get_cached_providers(self, endpoint: str) -> dict[str, str]:
+        from hermes_agent.acp.models import AcpRuntime
+
+        runtime = AcpRuntime.get_by_endpoint(endpoint)
+        if runtime and runtime.capabilities:
+            try:
+                data = json.loads(runtime.capabilities)
+                providers = data.get("providers", {})
+                if providers:
+                    return providers
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        providers = self.get_providers(endpoint)
+        if providers and runtime:
+            cache_data = json.dumps({"providers": providers, "fetched_at": datetime.now(timezone.utc).isoformat()})
+            AcpRuntime.update(capabilities=cache_data).where(AcpRuntime.runtime_id == runtime.runtime_id).execute()
+        return providers
+
+    def get_providers(self, endpoint: str) -> dict[str, str]:
+        base = endpoint.rstrip("/")
+
+        try:
+            resp = httpx.get(f"{base}/models", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                providers: dict[str, str] = {}
+                models_list = data if isinstance(data, list) else data.get("models", []) if isinstance(data, dict) else []
+                for m in models_list:
+                    if isinstance(m, dict):
+                        mid = m.get("id") or m.get("modelID") or ""
+                        pid = m.get("providerID") or m.get("provider") or ""
+                        if mid:
+                            providers[mid] = pid
+                if providers:
+                    _log.info("Discovered %d provider mappings from /models on %s", len(providers), base)
+                    return providers
+        except Exception:
+            pass
+
+        providers: dict[str, str] = {}
+        try:
+            resp = httpx.get(f"{base}/config", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                default_model = data.get("model", "")
+                if default_model and "/" in default_model:
+                    provider, model_id = default_model.split("/", 1)
+                    providers[model_id] = provider
+                    _log.info("Inferred provider mapping from /config: %s -> %s", model_id, provider)
+        except Exception:
+            pass
+
+        return providers
+
     def send_message(self, endpoint: str, session_id: str, prompt: str, model: str, timeout: int) -> dict:
         base = endpoint.rstrip("/")
         body: dict = {"parts": [{"type": "text", "text": prompt}]}
         if model:
-            provider = _infer_provider(model)
-            body["model"] = {"providerID": provider, "modelID": model}
+            if "/" in model:
+                provider, actual_model = model.split("/", 1)
+            else:
+                providers = self._get_cached_providers(endpoint)
+                provider = providers.get(model, "")
+                actual_model = model
+            body["model"] = {"providerID": provider, "modelID": actual_model}
         resp = httpx.post(
             f"{base}/session/{session_id}/message",
             json=body,
