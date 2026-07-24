@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from uuid import uuid4
 
 from peewee import BooleanField, CharField, IntegerField, Model, SqliteDatabase
 
@@ -53,7 +52,7 @@ class AcpRuntime(_BaseModel):
     @classmethod
     def get_ready_managed(cls):
         cls._ensure_db()
-        return list(cls.select().where((cls.status == "ready") & (cls.managed == True)).dicts())
+        return list(cls.select().where((cls.status == "ready") & cls.managed).dicts())
 
     @classmethod
     def get_by_endpoint(cls, endpoint):
@@ -96,7 +95,7 @@ class AcpRuntime(_BaseModel):
     @classmethod
     def count_managed_ready(cls):
         cls._ensure_db()
-        return cls.select().where((cls.status == "ready") & (cls.managed == True)).count()
+        return cls.select().where((cls.status == "ready") & cls.managed).count()
 
 
 class AcpConversation(_BaseModel):
@@ -117,9 +116,7 @@ class AcpConversation(_BaseModel):
         row = cls.get_or_none(cls.conversation_id == conversation_id)
         now = _now()
         if row:
-            cls.update(runtime_id=runtime_id, last_used_at=now, model=model or row.model).where(
-                cls.conversation_id == conversation_id
-            ).execute()
+            cls.update(runtime_id=runtime_id, last_used_at=now, model=model or row.model).where(cls.conversation_id == conversation_id).execute()
             return row
         cls.create(
             conversation_id=conversation_id,
@@ -139,9 +136,7 @@ class AcpConversation(_BaseModel):
     @classmethod
     def update_upstream_session(cls, conversation_id, upstream_session_id):
         cls._ensure_db()
-        cls.update(upstream_session_id=upstream_session_id, last_used_at=_now()).where(
-            cls.conversation_id == conversation_id
-        ).execute()
+        cls.update(upstream_session_id=upstream_session_id, last_used_at=_now()).where(cls.conversation_id == conversation_id).execute()
 
 
 class AcpTask(_BaseModel):
@@ -183,9 +178,7 @@ class AcpTask(_BaseModel):
         cls._ensure_db()
         if len(result_json) > 1048576:
             result_json = result_json[:1048576]
-        cls.update(status="completed", result=result_json, completed_at=_now()).where(
-            cls.task_id == task_id
-        ).execute()
+        cls.update(status="completed", result=result_json, completed_at=_now()).where(cls.task_id == task_id).execute()
 
     @classmethod
     def mark_failed(cls, task_id, error_msg, error_code=None):
@@ -220,13 +213,7 @@ class AcpTask(_BaseModel):
     @classmethod
     def fail_tasks_for_runtime(cls, runtime_id):
         cls._ensure_db()
-        tasks = list(
-            cls.select(cls.task_id)
-            .join(AcpConversation, on=(cls.conversation_id == AcpConversation.conversation_id))
-            .where(
-                (AcpConversation.runtime_id == runtime_id) & (cls.status == "running")
-            )
-        )
+        tasks = list(cls.select(cls.task_id).join(AcpConversation, on=(cls.conversation_id == AcpConversation.conversation_id)).where((AcpConversation.runtime_id == runtime_id) & (cls.status == "running")))
         for t in tasks:
             cls.mark_failed(t.task_id, "Runtime lost", "runtime_lost")
 
@@ -234,9 +221,7 @@ class AcpTask(_BaseModel):
     def cleanup_old(cls, max_age_hours=24):
         cls._ensure_db()
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
-        cls.delete().where(
-            (cls.status != "running") & (cls.completed_at.is_null(False)) & (cls.completed_at < cutoff)
-        ).execute()
+        cls.delete().where((cls.status != "running") & (cls.completed_at.is_null(False)) & (cls.completed_at < cutoff)).execute()
 
     @classmethod
     def reconcile_on_startup(cls):

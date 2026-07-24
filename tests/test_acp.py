@@ -19,29 +19,33 @@ class TestAcpTasksEndpoint:
         resp = client.post("/acp/tasks", json={}, headers=AUTH)
         assert resp.status_code == 422
 
-    def test_submit_with_model(self):
-        from hermes_agent.acp.runtime_broker import get_runtime_broker
-        from hermes_agent.acp.task_service import get_task_service
-
-        broker = get_runtime_broker()
-        adapter = broker.get_adapter()
-
-        with mock.patch.object(adapter, "detect_binary", return_value="/fake/opencode"):
-            with mock.patch.object(adapter, "spawn", return_value=99999):
-                with mock.patch.object(adapter, "health_check", return_value=True):
-                    with mock.patch.object(adapter, "wait_ready", return_value=True):
-                        with mock.patch.object(adapter, "get_version", return_value="1.0.0"):
-                            with mock.patch.object(adapter, "create_session", return_value={"id": "ses_test", "directory": "/"}):
-                                with mock.patch.object(adapter, "send_message", return_value={"result": "hello"}):
-                                    resp = client.post(
-                                        "/acp/tasks",
-                                        json={"prompt": "hello", "model": "deepseek-chat", "timeout": 30},
-                                        headers=AUTH,
-                                    )
+    def test_submit_returns_immediately(self):
+        with mock.patch("hermes_agent.routers.acp.get_task_service") as mock_svc:
+            instance = mock_svc.return_value
+            instance.submit_and_return_task_id.return_value = "t_abc123def456"
+            resp = client.post(
+                "/acp/tasks",
+                json={"prompt": "hello", "timeout": 60},
+                headers=AUTH,
+            )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "completed"
-        assert "task_id" in data
+        assert data["task_id"] == "t_abc123def456"
+        assert data["status"] == "running"
+
+    def test_submit_with_model(self):
+        with mock.patch("hermes_agent.routers.acp.get_task_service") as mock_svc:
+            instance = mock_svc.return_value
+            instance.submit_and_return_task_id.return_value = "t_model12345678"
+            resp = client.post(
+                "/acp/tasks",
+                json={"prompt": "hello", "model": "deepseek-chat", "timeout": 30},
+                headers=AUTH,
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["task_id"] == "t_model12345678"
+        assert data["status"] == "running"
 
     def test_task_not_found(self):
         resp = client.get("/acp/tasks/t_nonexistent", headers=AUTH)

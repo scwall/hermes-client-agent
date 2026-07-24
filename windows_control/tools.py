@@ -298,13 +298,37 @@ def _system_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 def _acp_handler(args: dict[str, Any], **kwargs: Any) -> str:
     agent = args.get("agent")
-    acp_timeout = int(args.get("timeout", 300))
-    json_data = {
-        "prompt": str(args["prompt"]),
-        "model": str(args.get("model", "")) if args.get("model") else "",
-        "timeout": acp_timeout,
-    }
-    return _make_request("POST", "/acp/tasks", json_data=json_data, timeout=acp_timeout + 10, agent=agent)
+    acp_timeout = int(args.get("timeout", 600))
+    submit_json = {"prompt": str(args["prompt"]), "timeout": acp_timeout}
+    model = args.get("model", "")
+    if model:
+        submit_json["model"] = str(model)
+
+    result = _make_request("POST", "/acp/tasks", json_data=submit_json, timeout=15, agent=agent)
+    parsed = json.loads(result)
+
+    task_id = parsed.get("task_id", "")
+    if not task_id:
+        return result
+
+    if parsed.get("status") in ("completed", "failed", "cancelled"):
+        return json.dumps(parsed)
+
+    deadline = time.time() + acp_timeout + 10
+    while time.time() < deadline:
+        time.sleep(2)
+        poll_result = _make_request("GET", f"/acp/tasks/{task_id}", timeout=10, agent=agent)
+        try:
+            poll_parsed = json.loads(poll_result)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        status = poll_parsed.get("status", "")
+        if status in ("completed", "failed", "cancelled"):
+            return json.dumps(poll_parsed)
+
+    _make_request("DELETE", f"/acp/tasks/{task_id}", timeout=10, agent=agent)
+    return json.dumps({"task_id": task_id, "status": "timed_out", "error": f"Task exceeded {acp_timeout}s timeout"})
 
 
 def _acp_poll_handler(args: dict[str, Any], **kwargs: Any) -> str:

@@ -83,7 +83,6 @@ def register(ctx: Any) -> None:
         ("windows_health", "windows", WINDOWS_HEALTH_SCHEMA, _health_handler),
         ("windows_capabilities", "windows", WINDOWS_CAPABILITIES_SCHEMA, _capabilities_handler),
         ("windows_acp", "windows", WINDOWS_ACP_SCHEMA, _acp_handler),
-        ("windows_acp_poll", "windows", WINDOWS_ACP_POLL_SCHEMA, _acp_poll_handler),
         ("windows_exec", "windows", WINDOWS_EXEC_SCHEMA, _exec_handler),
         ("windows_exec_batch", "windows", WINDOWS_EXEC_BATCH_SCHEMA, _exec_batch_handler),
         ("windows_file_read", "windows", WINDOWS_FILE_READ_SCHEMA, _file_read_handler),

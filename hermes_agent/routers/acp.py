@@ -17,8 +17,7 @@ from hermes_agent.security import verify_token
 router = APIRouter(tags=["acp"], dependencies=[Depends(verify_token)])
 _log = logging.getLogger("hermes-agent")
 
-DEFAULT_TIMEOUT = 300
-POLL_CUTOFF_S = 10
+DEFAULT_TIMEOUT = 600
 
 
 class AcpTaskRequest(BaseModel):
@@ -28,38 +27,18 @@ class AcpTaskRequest(BaseModel):
     conversation_id: Optional[str] = Field(None, description="Conversation ID for session reuse")
 
 
-class AcpTaskItem(BaseModel):
-    task_id: str
-    status: str
-    model: Optional[str]
-    agent_url: str
-
-
 @router.post("/acp/tasks", summary="Submit a task to the ACP coding agent")
 async def acp_submit_task(body: AcpTaskRequest):
     svc = get_task_service()
     conversation_id = body.conversation_id or "default"
-
-    try:
-        result = svc.submit_and_poll(
-            conversation_id=conversation_id,
-            prompt=body.prompt,
-            model=body.model or "",
-            timeout=body.timeout,
-        )
-        _log.info("ACP task %s completed in sync mode", result["task_id"])
-        return result
-    except Exception as exc:
-        detail = str(exc)
-        error_code = "task_error"
-        if "binary not found" in detail.lower():
-            error_code = "runtime_not_installed"
-        elif "health check" in detail.lower():
-            error_code = "runtime_start_failed"
-        elif "maximum" in detail.lower():
-            error_code = "too_many_runtimes"
-        _log.error("ACP task failed: %s", detail)
-        raise HTTPException(status_code=503, detail=detail)
+    task_id = svc.submit_and_return_task_id(
+        conversation_id=conversation_id,
+        prompt=body.prompt,
+        model=body.model or "",
+        timeout=body.timeout,
+    )
+    _log.info("ACP task %s submitted (async)", task_id)
+    return {"task_id": task_id, "status": "running"}
 
 
 @router.get("/acp/tasks/{task_id}", summary="Get task status and result")

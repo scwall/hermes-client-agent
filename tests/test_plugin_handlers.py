@@ -235,17 +235,34 @@ class TestHandlers:
         assert r["error"] == "missing executable"
 
     def test_acp_direct_success(self):
-        with _mock_request('{"task_id":"t_ok123","status":"completed","mode":"sync","result":{"text":"OK"}}') as mock:
+        mock_resp = json.dumps({"task_id": "t_ok123", "status": "completed", "result": {"text": "OK"}})
+        with _mock_request(mock_resp) as mock:
             result = json.loads(tools._acp_handler({"prompt": "test"}))
             assert result["task_id"] == "t_ok123"
             assert result["status"] == "completed"
             assert mock.call_args[0][1] == "/acp/tasks"
 
-    def test_acp_async_timeout_returns_task_id(self):
-        with _mock_request('{"task_id":"t_slow123","status":"running","mode":"async"}') as mock:
-            result = json.loads(tools._acp_handler({"prompt": "heavy task", "timeout": 300}))
-            assert result["task_id"] == "t_slow123"
-            assert result["status"] == "running"
+    def test_acp_polls_until_complete(self):
+        with patch.object(tools, "_make_request") as mock:
+            mock.side_effect = [
+                json.dumps({"task_id": "t_poll", "status": "running"}),
+                json.dumps({"task_id": "t_poll", "status": "running"}),
+                json.dumps({"task_id": "t_poll", "status": "completed", "result": {"text": "done"}}),
+            ]
+            result = json.loads(tools._acp_handler({"prompt": "test", "timeout": 60}))
+            assert result["status"] == "completed"
+            assert result["result"]["text"] == "done"
+            assert mock.call_count >= 3
+
+    def test_acp_timeout_calls_cancel(self):
+        with patch.object(tools, "_make_request") as mock:
+            responses = [json.dumps({"task_id": "t_tout", "status": "running"})]
+            for _ in range(100):
+                responses.append(json.dumps({"task_id": "t_tout", "status": "running"}))
+            responses.append(json.dumps({"task_id": "t_tout", "status": "cancelled"}))
+            mock.side_effect = responses
+            result = json.loads(tools._acp_handler({"prompt": "test", "timeout": 1}))
+            assert result["status"] == "timed_out"
 
     def test_acp_poll(self):
         with _mock_request('{"task_id":"t_abc123","status":"completed","result":"OK"}') as mock:

@@ -11,6 +11,32 @@ import httpx
 
 _log = logging.getLogger("hermes-agent")
 
+PROVIDER_MAP = {
+    "deepseek": "deepseek",
+    "deepseek-chat": "deepseek",
+    "deepseek-coder": "deepseek",
+    "deepseek-reasoner": "deepseek",
+    "deepseek-v4": "deepseek",
+    "claude": "anthropic",
+    "claude-sonnet": "anthropic",
+    "claude-opus": "anthropic",
+    "claude-sonnet-4": "anthropic",
+    "claude-opus-4": "anthropic",
+    "gpt-4o": "openai",
+    "gpt-4o-mini": "openai",
+    "gpt-5": "openai",
+    "gemini": "google",
+}
+
+
+def _infer_provider(model_id: str) -> str:
+    if not model_id:
+        return ""
+    for key, provider in PROVIDER_MAP.items():
+        if key in model_id.lower():
+            return provider
+    return ""
+
 
 class OpenCodeAdapter:
     name = "opencode"
@@ -44,18 +70,14 @@ class OpenCodeAdapter:
 
     def health_check(self, endpoint: str) -> bool:
         try:
-            resp = httpx.get(
-                f"{endpoint.rstrip('/')}/global/health", timeout=3
-            )
+            resp = httpx.get(f"{endpoint.rstrip('/')}/global/health", timeout=3)
             return resp.status_code == 200
         except Exception:
             return False
 
     def get_version(self, endpoint: str) -> Optional[str]:
         try:
-            resp = httpx.get(
-                f"{endpoint.rstrip('/')}/global/health", timeout=3
-            )
+            resp = httpx.get(f"{endpoint.rstrip('/')}/global/health", timeout=3)
             if resp.status_code == 200:
                 return resp.json().get("version")
         except Exception:
@@ -72,7 +94,8 @@ class OpenCodeAdapter:
         base = endpoint.rstrip("/")
         body: dict = {"parts": [{"type": "text", "text": prompt}]}
         if model:
-            body["model"] = {"providerID": "", "modelID": model}
+            provider = _infer_provider(model)
+            body["model"] = {"providerID": provider, "modelID": model}
         resp = httpx.post(
             f"{base}/session/{session_id}/message",
             json=body,
@@ -82,7 +105,11 @@ class OpenCodeAdapter:
         return resp.json()
 
     def cancel(self, endpoint: str, session_id: str) -> None:
-        pass
+        base = endpoint.rstrip("/")
+        try:
+            httpx.post(f"{base}/session/{session_id}/abort", json={}, timeout=10)
+        except Exception:
+            _log.warning("Failed to abort session %s on %s", session_id, endpoint)
 
     def get_default_port(self) -> int:
         return 4444

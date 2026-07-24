@@ -1,4 +1,6 @@
 """FastAPI application factory with middleware, routers, and lifespan."""
+
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -8,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from hermes_agent.acp import get_runtime_broker
+from hermes_agent.acp import get_runtime_broker, get_task_service
 from hermes_agent.acp.models import AcpTask
 from hermes_agent.audit import AuditMiddleware, get_audit_logger
 from hermes_agent.config import PORT, TOKEN, log
@@ -37,7 +39,9 @@ async def lifespan(app: FastAPI):
     log.info("Token: %s...%s", TOKEN[:6], TOKEN[-4:] if len(TOKEN) > 10 else "****")
     get_audit_logger()
     broker = get_runtime_broker()
-    AcpTask.reconcile_on_startup()
+    await asyncio.to_thread(broker.cleanup_zombies)
+    svc = get_task_service()
+    await asyncio.to_thread(svc.reconcile_stale_tasks)
     log.info("ACP runtime broker ready")
     yield
     get_audit_logger().close()
@@ -46,10 +50,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Hermes Windows Agent",
-    description=(
-        "HTTP REST API for remote Windows machine control — "
-        "shell, files, screenshot, mouse, keyboard, windows, system."
-    ),
+    description=("HTTP REST API for remote Windows machine control — shell, files, screenshot, mouse, keyboard, windows, system."),
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",

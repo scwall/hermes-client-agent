@@ -25,19 +25,19 @@ def _s(name: str, desc: str, properties: dict[str, Any], required: list[str] | N
 
 WINDOWS_HEALTH_SCHEMA = _s(
     "windows_health",
-    "Check the health status of the remote Windows agent.",
+    "Check the health status of the remote agent (Windows or Linux).",
     {},
 )
 
 WINDOWS_CAPABILITIES_SCHEMA = _s(
     "windows_capabilities",
-    "List available modules and endpoints on the remote Windows agent.",
+    "List available modules and endpoints on the remote agent (Windows or Linux).",
     {},
 )
 
 WINDOWS_EXEC_BATCH_SCHEMA = _s(
     "windows_exec_batch",
-    "Execute multiple commands sequentially on the remote PC. Use this instead of multiple windows_exec calls to save tokens.",
+    "Execute multiple commands sequentially on the remote PC (Windows or Linux). Use this instead of multiple windows_exec calls to save tokens.",
     {
         "commands": {
             "type": "array",
@@ -63,15 +63,15 @@ WINDOWS_EXEC_BATCH_SCHEMA = _s(
 
 WINDOWS_EXEC_SCHEMA = _s(
     "windows_exec",
-    "Execute a command on the remote Windows PC via cmd or powershell.",
+    "Execute a command on the remote PC via shell (cmd/powershell on Windows, bash/sh on Linux).",
     {
         "command": {
             "type": "string",
-            "description": "Command to execute on the remote PC (e.g., 'dir', 'ipconfig').",
+            "description": "Command to execute on the remote PC — 'dir' on Windows, 'ls -la' on Linux.",
         },
         "shell": {
             "type": "string",
-            "description": "Shell to use: 'cmd' (default) or 'powershell'.",
+            "description": "Shell to use: 'cmd' or 'powershell' on Windows, 'bash' on Linux (default: 'cmd').",
             "default": "cmd",
         },
         "timeout": {
@@ -85,11 +85,11 @@ WINDOWS_EXEC_SCHEMA = _s(
 
 WINDOWS_FILE_READ_SCHEMA = _s(
     "windows_file_read",
-    "Read a file from the remote Windows PC.",
+    "Read a file from the remote PC (Windows or Linux).",
     {
         "path": {
             "type": "string",
-            "description": "Full path to the file (e.g., 'C:\\Users\\admin\\doc.txt').",
+            "description": "Full path to the file (e.g. 'C:\\Users\\admin\\doc.txt' on Windows, '/home/user/doc.txt' on Linux).",
         },
     },
     ["path"],
@@ -97,7 +97,7 @@ WINDOWS_FILE_READ_SCHEMA = _s(
 
 WINDOWS_FILE_WRITE_SCHEMA = _s(
     "windows_file_write",
-    "Write content to a file on the remote Windows PC.",
+    "Write content to a file on the remote PC (Windows or Linux).",
     {
         "path": {
             "type": "string",
@@ -113,7 +113,7 @@ WINDOWS_FILE_WRITE_SCHEMA = _s(
 
 WINDOWS_FILE_DELETE_SCHEMA = _s(
     "windows_file_delete",
-    "Delete a file from the remote Windows PC.",
+    "Delete a file from the remote PC (Windows or Linux).",
     {
         "path": {
             "type": "string",
@@ -234,7 +234,7 @@ WINDOWS_WINDOW_FOCUS_SCHEMA = _s(
     {
         "title_substring": {
             "type": "string",
-            "description": "Substring of the window title (e.g., 'Notepad').",
+            "description": "Substring of the window title (e.g., 'Notepad' on Windows, 'Firefox' on Linux).",
         },
     },
     ["title_substring"],
@@ -254,7 +254,7 @@ WINDOWS_WINDOW_LIST_SCHEMA = _s(
 
 WINDOWS_SCREENSHOT_SCHEMA = _s(
     "windows_screenshot",
-    "Capture a screenshot of the remote PC's display. Use scale=0.5 for a lighter thumbnail, quality=60 for good compression.",
+    "Capture a screenshot of the remote PC's display (Windows or Linux). Use scale=0.5 for a lighter thumbnail, quality=60 for good compression.",
     {
         "region": {
             "type": "string",
@@ -306,9 +306,10 @@ WINDOWS_SYSTEM_SCHEMA = _s(
 WINDOWS_ACP_SCHEMA = _s(
     "windows_acp",
     "Delegate a coding task to a standalone AI coding agent (OpenCode, Claude Code, or Junie) "
-    "running on the remote machine. The agent handles everything automatically: runtime spawn, "
-    "session reuse, provider detection. For tasks completing quickly the result is returned "
-    "directly. For longer tasks you MAY need to poll with windows_acp_poll.",
+    "running on the remote machine. Works on both Linux and Windows remote agents. "
+    "The agent handles everything automatically: runtime spawn, session reuse, provider detection. "
+    "Result is always terminal (completed, failed, or timed_out). "
+    "No polling needed — the tool waits internally and returns the final result.",
     {
         "prompt": {
             "type": "string",
@@ -321,11 +322,6 @@ WINDOWS_ACP_SCHEMA = _s(
         "model": {
             "type": "string",
             "description": "Optional model ID (e.g. 'deepseek-chat', 'deepseek-v4-pro'). Provider auto-detected. Omit for default.",
-        },
-        "timeout": {
-            "type": "integer",
-            "description": "Max task duration in seconds (default: 300). Increase for complex work.",
-            "default": 300,
         },
     },
     ["prompt"],
@@ -345,11 +341,11 @@ WINDOWS_ACP_POLL_SCHEMA = _s(
 
 WINDOWS_OPEN_APP_SCHEMA = _s(
     "windows_open_app",
-    "Launch an application on the remote PC and optionally bring its window to front.",
+    "Launch an application on the remote PC (Windows or Linux) and optionally bring its window to front.",
     {
         "executable": {
             "type": "string",
-            "description": "Application name (e.g., 'notepad.exe', 'calc.exe', 'chrome.exe').",
+            "description": "Application name — 'notepad.exe' on Windows, 'firefox' on Linux.",
         },
         "arguments": {
             "type": "string",
