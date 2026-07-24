@@ -78,7 +78,7 @@ Hermes runs wherever you want. Agents live on target machines. Communication goe
 | App launch | — | `windows_open_app` (launch + focus) |
 | Screenshot | `GET /screenshot` | `windows_screenshot` |
 | System | `GET /system`, `GET /processes`, `POST /process/kill` | `windows_system`, `windows_processes` |
-| **ACP Bridge** | `POST /acp`, `POST /acp/spawn`, `GET /acp/sessions`, `GET /acp/diagnostics` | `windows_acp` |
+| **ACP Bridge** | `POST /acp/tasks`, `GET /acp/tasks/{id}`, `DELETE /acp/tasks/{id}`, `GET /acp/status`, `GET /acp/sessions`, `GET /acp/diagnostics` | `windows_acp` |
 | Dashboard | `GET /dashboard`, `GET /dashboard/{logs,errors,exec}` | — |
 | API logs | `GET /api/logs`, `GET /api/stats`, `GET /api/logs/export` | — |
 
@@ -93,15 +93,17 @@ The `/acp` bridge relays tasks to ACP-compatible AI coding agents (OpenCode, Cla
 ### Architecture
 
 ```
-Hermes Agent                   OpenCode
+Hermes Agent                   OpenCode / Claude Code / Junie
    │                              │
-   │  POST /acp/spawn             │
-   ├─────────────────────────────►│  opencode serve
-   │                              │  → HTTP server
-   │  POST /acp                   │
-   ├─────────────────────────────►│  1. POST /session
-   │                              │  2. POST /session/{id}/message
-   │                              │  → AI response
+   │  POST /acp/tasks             │  opencode serve
+   ├─────────────────────────────►│  → async task submission
+   │  202 Accepted                │
+   │  { task_id, status }         │
+   │◄─────────────────────────────┤
+   │                              │
+   │  GET /acp/tasks/{id}         │  poll result
+   ├─────────────────────────────►│
+   │  { status, result }         │
    │◄─────────────────────────────┤
 ```
 
@@ -109,11 +111,12 @@ Hermes Agent                   OpenCode
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/acp` | Relay a prompt to an ACP agent (auto-creates session, infers provider, streams response) |
-| `POST` | `/acp/spawn` | Launch a new OpenCode server on a free port |
+| `POST` | `/acp/tasks` | Submit a task to an ACP agent (async, returns `task_id`, auto-creates session, infers provider) |
+| `GET` | `/acp/tasks/{task_id}` | Poll task status and result |
+| `DELETE` | `/acp/tasks/{task_id}` | Cancel a running task |
+| `GET` | `/acp/status` | System-level ACP status: managed runtimes, running tasks |
 | `GET` | `/acp/sessions` | List active ACP sessions (PID, port, status) |
-| `DELETE` | `/acp/sessions/{id}` | Stop an ACP session |
-| `GET` | `/acp/diagnostics` | Inspect agent binary, config, available models (344 discovered) |
+| `GET` | `/acp/diagnostics` | Inspect agent binary, config, available models, health |
 
 ### Provider inference
 
@@ -129,21 +132,23 @@ When the `model` field is specified (e.g. `deepseek-chat`), the bridge auto-infe
 ### Examples
 
 ```bash
-# Launch an OpenCode agent
-curl -X POST http://localhost:8765/acp/spawn \
-  -H "X-Agent-Token: YOUR_TOKEN"
-
-# Send a prompt (auto-creates session, infers provider)
-curl -X POST http://localhost:8765/acp \
+# Submit a task (async, returns task_id)
+curl -X POST http://localhost:8765/acp/tasks \
   -H "X-Agent-Token: YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"agent_url":"http://localhost:4444","prompt":"explain this codebase","model":"deepseek-chat","timeout":120}'
+  -d '{"prompt":"explain this codebase","model":"deepseek-chat","timeout":120}'
+
+# Poll task result
+curl http://localhost:8765/acp/tasks/{task_id} -H "X-Agent-Token: YOUR_TOKEN"
 
 # List active sessions
 curl http://localhost:8765/acp/sessions -H "X-Agent-Token: YOUR_TOKEN"
 
-# Run diagnostics (models, binary, config)
+# Run diagnostics (models, binary, config, health)
 curl http://localhost:8765/acp/diagnostics -H "X-Agent-Token: YOUR_TOKEN"
+
+# System status
+curl http://localhost:8765/acp/status -H "X-Agent-Token: YOUR_TOKEN"
 ```
 
 ---
@@ -233,6 +238,9 @@ Restart Hermes after configuration. The plugin logs loaded agents on startup.
 | `HERMES_AGENT_HOST` | `0.0.0.0` | Listen interface |
 | `HERMES_AGENT_PORT` | `8765` | Listen port |
 | `HERMES_ALLOWED_PATHS` | `~`, `/home`, `C:\Users\` | File access whitelist |
+| `HERMES_DEBUG` | `false` | Enable debug logging |
+| `ACP_TASK_TIMEOUT` | `600` | Default ACP task timeout (seconds) |
+| `ACP_MAX_TIMEOUT` | `3600` | Maximum allowed ACP task timeout |
 
 ---
 
@@ -284,7 +292,7 @@ curl "http://agent:8765/api/logs/export?format=csv" -H "X-Agent-Token: YOUR_TOKE
 ## Development
 
 ```bash
-uv run pytest tests/ -v       # 200 tests
+uv run pytest tests/ -v       # 135 tests
 python scripts/build_exe.py   # → dist/hermes-agent.exe (23.5 MiB)
 uv run ruff check .           # lint
 uv run ruff format .          # format
@@ -308,7 +316,12 @@ Run the full endpoint test suite:
 - [x] Structured audit log (JSON Lines) with console output
 - [x] CSV/JSON log export
 - [x] PEP8 clean (ruff, line-length 360)
-- [x] ACP bridge — relay prompts to OpenCode/Claude Code/Junie, session management, model discovery
+- [x] ACP bridge — async task submission, polling, cancellation, session management, model discovery, diagnostics
+- [x] ACP runtime broker — lifecycle management, health checks, stale runtime cleanup
+- [x] ACP provider inference — automatic model→provider mapping via `/models` and `/config` endpoints
+- [x] ACP database models — Peewee ORM for runtimes, conversations, tasks
+- [x] Debug logging — configurable via `HERMES_DEBUG` env var
+- [x] Linux compatibility — screenshot and exec support for Linux targets
 - [ ] Native Linux agent (systemd, X11/Wayland screenshot, xdotool)
 - [ ] Native macOS agent (launchd, CoreGraphics screenshot)
 - [ ] Multi-agent dashboard (unified view of all agents)
