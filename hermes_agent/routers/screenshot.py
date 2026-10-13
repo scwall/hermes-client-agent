@@ -62,7 +62,7 @@ def _capture_screen_rgba() -> tuple:
     bmp_info = (ctypes.c_ubyte * 52)()
     struct.pack_into("<I", bmp_info, 0, 52)
     struct.pack_into("<i", bmp_info, 4, width)
-    struct.pack_into("<i", bmp_info, 8, -height)
+    struct.pack_into("<i", bmp_info, 8, height)
     struct.pack_into("<H", bmp_info, 12, 1)
     struct.pack_into("<H", bmp_info, 14, 32)
     gdi32.GetDIBits(hdc_mem, hbmp, 0, height, bmp_data, ctypes.cast(bmp_info, ctypes.POINTER(ctypes.c_ubyte)), 0)
